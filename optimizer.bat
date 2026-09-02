@@ -44,7 +44,10 @@ for /f "tokens=* delims=" %%A in ('curl -s -m 3 "%VER_URL%" 2^>nul') do (
 )
 
 if "%REMOTE_VER%"=="" goto menu
-if "%REMOTE_VER%"=="%CURRENT_VER%" goto menu
+
+:: PERBAIKAN 1: Menggunakan findstr agar mengabaikan karakter \r dari GitHub
+echo %REMOTE_VER% | findstr /c:"%CURRENT_VER%" >nul
+if %errorlevel% equ 0 goto menu
 
 echo %REMOTE_VER% | findstr /i "404 Not Found" >nul
 if %errorlevel% equ 0 goto menu
@@ -62,7 +65,8 @@ if exist "%temp%\new_optimizer.bat" (
         echo timeout /t 1 /nobreak ^>nul
         echo copy /y "%temp%\new_optimizer.bat" "%~f0" ^>nul
         echo del /f /q "%temp%\new_optimizer.bat" ^>nul
-        echo start "" /min cmd /c "%~f0"
+        :: PERBAIKAN 2: Hapus /min agar aplikasi tampil normal (tidak hidden) setelah update
+        echo start "" "%~f0"
         echo exit
     ) > "%temp%\self_updater.bat"
     
