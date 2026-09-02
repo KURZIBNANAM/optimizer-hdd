@@ -36,58 +36,45 @@ echo    MEMERIKSA PEMBARUAN SISTEM...
 echo  ======================================================================
 echo.
 
-:: Ambil isi file version.txt (timeout 3 detik agar tidak menghambat saat offline)
-for /f "usebackq delims=" %%A in (`curl -s -m 3 "%VER_URL%" 2^>nul`) do set "REMOTE_VER=%%A"
-
-if "%REMOTE_VER%"=="" (
-    echo    [*] Tidak ada koneksi internet / server tidak merespons.
-    echo    [*] Menjalankan versi saat ini (v%CURRENT_VER%)...
-    timeout /t 2 /nobreak >nul
-    goto :menu
+set "REMOTE_VER="
+:: Ambil baris pertama version.txt secara silent
+for /f "tokens=* delims=" %%A in ('curl -s -m 3 "%VER_URL%" 2^>nul') do (
+    if not defined REMOTE_VER set "REMOTE_VER=%%A"
 )
 
-if not "%REMOTE_VER%"=="%CURRENT_VER%" (
-    echo    [!] Versi baru terdeteksi: v%REMOTE_VER% ^(Versi terpasang: v%CURRENT_VER%^)
-    echo    [*] Mengunduh pembaruan, mohon tunggu...
-    
-    curl -s -m 15 -o "%~dp0update_temp.bat" "%UPDATE_URL%"
-    
-    if exist "%~dp0update_temp.bat" (
-        echo    [OK] Unduhan selesai. Memperbarui skrip...
-        
-        :: Bikin worker batch sementara untuk me-replace file asli dan me-relaunch
-        (
-            echo @echo off
-            echo timeout /t 1 /nobreak ^>nul
-            echo move /y "%~dp0update_temp.bat" "%~f0" ^>nul
-            echo start "" "%~f0"
-            echo exit
-        ) > "%temp%\self_updater.bat"
-        
-        start "" "%temp%\self_updater.bat"
-        exit /b
-    ) else (
-        echo    [!] Gagal mengunduh file update. Melanjutkan versi lama...
-        timeout /t 2 /nobreak >nul
-    )
-)
+:: Jika offline, gagal curl, atau versinya persis sama -> langsung ke menu
+if "%REMOTE_VER%"=="" goto menu
+if "%REMOTE_VER%"=="%CURRENT_VER%" goto menu
 
-goto menu
+:: Jika versi terdeteksi beda (dan bukan respon error 404 dari GitHub)
+echo %REMOTE_VER% | findstr /i "404 Not Found" >nul
+if %errorlevel% equ 0 goto menu
 
-:: ======================================================================
-:: SUBROUTINE: Check - %1=errorlevel  %2=pesan sukses  %3=pesan gagal
-:: (pesan TIDAK boleh mengandung tanda kurung supaya parsing aman)
-:: ======================================================================
-:Check
-if "%~1"=="0" (
-    echo       [OK] %~2
+echo    [!] Versi baru terdeteksi: v%REMOTE_VER% (Versi terpasang: v%CURRENT_VER%)
+echo    [*] Mengunduh pembaruan, mohon tunggu...
+
+curl -s -m 15 -o "%temp%\new_optimizer.bat" "%UPDATE_URL%"
+
+if exist "%temp%\new_optimizer.bat" (
+    echo    [OK] Unduhan selesai. Memperbarui skrip...
+    
+    :: Buat helper script untuk menimpa file ini dan meluncurkan ulang via cmd
+    (
+        echo @echo off
+        echo timeout /t 1 /nobreak ^>nul
+        echo copy /y "%temp%\new_optimizer.bat" "%~f0" ^>nul
+        echo del /f /q "%temp%\new_optimizer.bat" ^>nul
+        echo start "" cmd /c "%~f0"
+        echo exit
+    ) > "%temp%\self_updater.bat"
+    
+    start "" "%temp%\self_updater.bat"
+    exit /b
 ) else (
-    echo       [GAGAL] %~3, kode error %~1
+    echo    [!] Gagal mengunduh file update. Melanjutkan versi lama...
+    timeout /t 2 /nobreak >nul
+    goto menu
 )
-exit /b
-
-:menu
-cls
 echo  ======================================================================
 echo     SYSTEM OPTIMIZER WINDOWS 10 (HDD KASIR) - BM JAYA 2 - v%CURRENT_VER%
 echo  ======================================================================
