@@ -191,9 +191,9 @@ echo    - Layanan POS, Printer, dan Remote Desktop tetap aktif normal.
 echo    - SysMain tetap berjalan untuk mempercepat cache aplikasi di HDD.
 echo  ======================================================================
 echo.
-echo    Tekan tombol apa saja untuk keluar...
+echo    Tekan tombol apa saja untuk kembali ke menu utama...
 pause >nul
-exit /b
+goto menu
 
 :restore
 cls
@@ -278,9 +278,9 @@ echo    Seluruh service dan registry telah dikembalikan ke pengaturan awal
 echo    Windows tanpa perlu reboot.
 echo  ======================================================================
 echo.
-echo    Tekan tombol apa saja untuk keluar...
+echo    Tekan tombol apa saja untuk kembali ke menu utama...
 pause >nul
-exit /b
+goto menu
 
 :exit
 cls
