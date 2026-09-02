@@ -28,7 +28,7 @@ if %errorLevel% neq 0 (
 :: ======================================================================
 :: BAGIAN AUTO UPDATE
 :: ======================================================================
-set "CURRENT_VER=2.0"
+set "CURRENT_VER=2.1"
 set "VER_URL=https://raw.githubusercontent.com/KURZIBNANAM/optimizer-hdd/main/version.txt"
 set "UPDATE_URL=https://raw.githubusercontent.com/KURZIBNANAM/optimizer-hdd/main/optimizer.bat"
 
