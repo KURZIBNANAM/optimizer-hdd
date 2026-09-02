@@ -75,6 +75,8 @@ if exist "%temp%\new_optimizer.bat" (
     timeout /t 2 /nobreak >nul
     goto menu
 )
+
+:menu
 echo  ======================================================================
 echo     SYSTEM OPTIMIZER WINDOWS 10 (HDD KASIR) - BM JAYA 2 - v%CURRENT_VER%
 echo  ======================================================================
@@ -306,4 +308,12 @@ goto menu
 
 :exit
 cls
+exit /b
+
+:Check
+if %1 equ 0 (
+    echo        [OK] %2
+) else (
+    echo        [!!] %3
+)
 exit /b
