@@ -77,6 +77,7 @@ if exist "%temp%\new_optimizer.bat" (
 )
 
 :menu
+cls
 echo  ======================================================================
 echo     SYSTEM OPTIMIZER WINDOWS 10 (HDD KASIR) - BM JAYA 2 - v%CURRENT_VER%
 echo  ======================================================================
