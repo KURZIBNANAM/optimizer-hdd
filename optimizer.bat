@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions enabledelayedexpansion
 
-title OPTIMIZER WINDOWS 10 HDD - BM JAYA 2 (v2)
+title OPTIMIZER WINDOWS 10 HDD - BM JAYA 2 (v1)
 mode con: cols=76 lines=32
 color 0b
 
@@ -28,7 +28,7 @@ if %errorLevel% neq 0 (
 :: ======================================================================
 :: BAGIAN AUTO UPDATE
 :: ======================================================================
-set "CURRENT_VER=2.0"
+set "CURRENT_VER=1.0"
 set "VER_URL=https://raw.githubusercontent.com/KURZIBNANAM/optimizer-hdd/main/version.txt"
 set "UPDATE_URL=https://raw.githubusercontent.com/KURZIBNANAM/optimizer-hdd/main/optimizer.bat"
 
