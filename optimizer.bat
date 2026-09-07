@@ -1,4 +1,3 @@
-```bat
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 title SYSTEM OPTIMIZER WINDOWS 10 HDD - BM JAYA 2 v1.2
@@ -237,15 +236,12 @@ if defined FREE_SPACE echo       Ruang kosong : %FREE_SPACE%
 echo.
 echo  [*] Memeriksa backup konfigurasi...
 
-if exist "%BACKUP_FILE%" (
-    echo.
-    echo       [!] Backup konfigurasi sebelumnya ditemukan.
-    echo.
-    choice /C YN /N /M "       Gunakan backup lama? [Y/N] : "
-    if errorlevel 2 goto create_backup
-    echo       [OK] Backup lama dipertahankan.
-    goto backup_done
-)
+if not exist "%BACKUP_FILE%" goto create_backup
+echo.
+echo       [OK] Backup konfigurasi sudah tersedia.
+echo       [i] Backup tidak akan ditimpa untuk menjaga kondisi asli.
+echo.
+goto backup_done
 
 :create_backup
 echo.
@@ -907,4 +903,3 @@ echo  ==========================================================================
 echo.
 endlocal
 exit /b 0
-```
