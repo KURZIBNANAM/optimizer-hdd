@@ -1,21 +1,26 @@
+```bat
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
-title SYSTEM OPTIMIZER WINDOWS 10 HDD - BM JAYA 2 v1.2
-mode con: cols=78 lines=36
+title SYSTEM OPTIMIZER WINDOWS 10 HDD - BM JAYA 2 v1.3
+mode con: cols=82 lines=38
 color 0b
 
 :: ======================================================================
 :: SYSTEM OPTIMIZER WINDOWS 10 HDD - BM JAYA 2
-:: VERSION 1.2 - POS SAFE
+:: VERSION 1.3 - POS SAFE
 :: ======================================================================
-set "CURRENT_VER=1.2"
+set "CURRENT_VER=1.3"
 set "APP_NAME=System Optimizer Windows 10 HDD"
 set "VER_URL=https://raw.githubusercontent.com/KURZIBNANAM/optimizer-hdd/main/version.txt"
 set "UPDATE_URL=https://raw.githubusercontent.com/KURZIBNANAM/optimizer-hdd/main/optimizer.bat"
-set "BACKUP_DIR=%ProgramData%\BMJAYA2\SystemOptimizer\Backup"
-set "LOG_DIR=%ProgramData%\BMJAYA2\SystemOptimizer\Logs"
+
+set "BASE_DIR=%ProgramData%\BMJAYA2\SystemOptimizer"
+set "BACKUP_DIR=%BASE_DIR%\Backup"
+set "LOG_DIR=%BASE_DIR%\Logs"
 set "BACKUP_FILE=%BACKUP_DIR%\system_backup.dat"
+set "BACKUP_MARKER=%BACKUP_DIR%\backup_complete.flag"
 set "LOG_FILE=%LOG_DIR%\optimizer.log"
+set "LOCK_FILE=%TEMP%\BMJAYA2_SystemOptimizer.lock"
 
 :: ======================================================================
 :: CEK ADMINISTRATOR
@@ -24,33 +29,72 @@ net session >nul 2>&1
 if not "%errorlevel%"=="0" (
     cls
     echo.
-    echo  ============================================================================
+    echo  ==============================================================================
     echo       SYSTEM OPTIMIZER WINDOWS 10 HDD - BM JAYA 2 v%CURRENT_VER%
-    echo  ============================================================================
+    echo  ==============================================================================
     echo.
     echo       [!!] HAK ADMINISTRATOR DIBUTUHKAN
     echo.
     echo       Klik kanan file BAT ini lalu pilih:
     echo.
-    echo                         RUN AS ADMINISTRATOR
+    echo                           RUN AS ADMINISTRATOR
     echo.
-    echo  ============================================================================
+    echo  ==============================================================================
     pause
     exit /b 1
 )
 
 :: ======================================================================
+:: CEK INSTANCE GANDA
+:: ======================================================================
+if exist "%LOCK_FILE%" (
+    echo.
+    echo  [!!] System Optimizer sedang digunakan oleh instance lain.
+    echo.
+    echo       Jika tidak ada optimizer lain yang berjalan, hapus file:
+    echo       %LOCK_FILE%
+    echo.
+    pause
+    exit /b 1
+)
+
+> "%LOCK_FILE%" echo %COMPUTERNAME% - %date% %time%
+set "LOCK_CREATED=1"
+
+:: ======================================================================
 :: INISIALISASI
 :: ======================================================================
+if not exist "%BASE_DIR%" mkdir "%BASE_DIR%" >nul 2>&1
 if not exist "%BACKUP_DIR%" mkdir "%BACKUP_DIR%" >nul 2>&1
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%" >nul 2>&1
+
+>>"%LOG_FILE%" echo.
+>>"%LOG_FILE%" echo ============================================================
+>>"%LOG_FILE%" echo START - %date% %time%
+>>"%LOG_FILE%" echo VERSION: %CURRENT_VER%
+>>"%LOG_FILE%" echo COMPUTER: %COMPUTERNAME%
 
 :: ======================================================================
 :: INFORMASI WINDOWS
 :: ======================================================================
 set "WIN_NAME=UNKNOWN"
+set "WIN_VERSION="
+
 ver | findstr /i "10.0" >nul 2>&1
-if "%errorlevel%"=="0" set "WIN_NAME=Windows 10"
+if "%errorlevel%"=="0" (
+    set "WIN_NAME=Windows 10"
+) else (
+    set "WIN_NAME=Windows bukan Windows 10"
+)
+
+for /f "tokens=2 delims=[]" %%A in ('ver') do set "WIN_VERSION=%%A"
+
+:: ======================================================================
+:: CEK POWERSHELL
+:: ======================================================================
+set "PS_AVAILABLE=0"
+where powershell >nul 2>&1
+if "%errorlevel%"=="0" set "PS_AVAILABLE=1"
 
 :: ======================================================================
 :: AUTO UPDATE
@@ -58,10 +102,10 @@ if "%errorlevel%"=="0" set "WIN_NAME=Windows 10"
 :UPDATE_CHECK
 cls
 echo.
-echo  ============================================================================
+echo  ==============================================================================
 echo                    SYSTEM OPTIMIZER WINDOWS 10 HDD
 echo                              BM JAYA 2
-echo  ============================================================================
+echo  ==============================================================================
 echo.
 echo       Versi terpasang : v%CURRENT_VER%
 echo       [*] Memeriksa pembaruan...
@@ -70,31 +114,79 @@ echo.
 where curl >nul 2>&1
 if not "%errorlevel%"=="0" (
     echo       [!] CURL tidak tersedia.
-    echo       [i] Melanjutkan dengan versi saat ini...
+    echo       [i] Pemeriksaan update dilewati.
+    >>"%LOG_FILE%" echo [INFO] CURL unavailable - update skipped
+    timeout /t 2 /nobreak >nul
+    goto menu
+)
+
+if "%PS_AVAILABLE%"=="0" (
+    echo       [!] PowerShell tidak tersedia.
+    echo       [i] Pemeriksaan versi update dilewati.
+    >>"%LOG_FILE%" echo [INFO] PowerShell unavailable - version check skipped
     timeout /t 2 /nobreak >nul
     goto menu
 )
 
 set "REMOTE_VER="
-for /f "usebackq tokens=1 delims= " %%A in (`curl -L -s --connect-timeout 3 -m 5 "%VER_URL%" 2^>nul`) do (
+
+for /f "usebackq tokens=1 delims= " %%A in (`curl -L -s --fail --connect-timeout 3 -m 5 "%VER_URL%" 2^>nul`) do (
     if not defined REMOTE_VER set "REMOTE_VER=%%A"
 )
 
 if not defined REMOTE_VER (
     echo       [i] Server update tidak dapat dihubungi.
     echo       [i] Melanjutkan dengan versi saat ini...
+    >>"%LOG_FILE%" echo [INFO] Update server unavailable
     timeout /t 2 /nobreak >nul
     goto menu
 )
 
+:: Hilangkan awalan v/V
 set "REMOTE_VER=!REMOTE_VER:v=!"
+set "REMOTE_VER=!REMOTE_VER:V=!"
 set "REMOTE_VER=!REMOTE_VER: =!"
+
+:: Validasi format versi
+echo(!REMOTE_VER!| findstr /r /x "[0-9][0-9]*\.[0-9][0-9]*\(\.[0-9][0-9]*\)*" >nul 2>&1
+if not "%errorlevel%"=="0" (
+    echo       [!] Format versi repository tidak valid.
+    echo       [i] Update dibatalkan demi keamanan.
+    >>"%LOG_FILE%" echo [ERROR] Invalid remote version: %REMOTE_VER%
+    timeout /t 2 /nobreak >nul
+    goto menu
+)
 
 echo       Versi repository : v%REMOTE_VER%
 echo.
 
-if /i "%REMOTE_VER%"=="%CURRENT_VER%" (
+:: ----------------------------------------------------------------------
+:: Bandingkan versi secara numerik menggunakan PowerShell.
+:: Hanya update jika REMOTE_VER > CURRENT_VER.
+:: ----------------------------------------------------------------------
+set "VERSION_STATUS="
+
+for /f "delims=" %%A in ('powershell -NoProfile -ExecutionPolicy Bypass -Command "$a=[version]'%CURRENT_VER%';$b=[version]'%REMOTE_VER%';if($b -gt $a){'NEW'}elseif($b -eq $a){'SAME'}else{'OLD'}" 2^>nul') do set "VERSION_STATUS=%%A"
+
+if /i "%VERSION_STATUS%"=="SAME" (
     echo       [OK] Anda sudah menggunakan versi terbaru.
+    >>"%LOG_FILE%" echo [OK] Version current
+    timeout /t 2 /nobreak >nul
+    goto menu
+)
+
+if /i "%VERSION_STATUS%"=="OLD" (
+    echo       [OK] Versi lokal lebih baru dari repository.
+    echo       [i] Downgrade otomatis tidak diizinkan.
+    >>"%LOG_FILE%" echo [INFO] Remote version older - update rejected
+    timeout /t 2 /nobreak >nul
+    goto menu
+)
+
+if /i not "%VERSION_STATUS%"=="NEW" (
+    echo       [!!] Versi update tidak dapat diverifikasi.
+    echo       [i] Update dibatalkan.
+    >>"%LOG_FILE%" echo [ERROR] Version comparison failed
     timeout /t 2 /nobreak >nul
     goto menu
 )
@@ -103,41 +195,98 @@ echo       [!] Versi baru terdeteksi: v%REMOTE_VER%
 echo       [*] Mengunduh pembaruan...
 echo.
 
-set "UPDATE_TEMP=%TEMP%\BMJAYA2_optimizer_%RANDOM%.bat"
-curl -L -s --connect-timeout 5 -m 30 -o "%UPDATE_TEMP%" "%UPDATE_URL%" >nul 2>&1
+set "UPDATE_TEMP=%TEMP%\BMJAYA2_optimizer_%RANDOM%_%RANDOM%.bat"
+
+curl -L -s --fail --connect-timeout 5 -m 30 -o "%UPDATE_TEMP%" "%UPDATE_URL%" >nul 2>&1
 
 if not exist "%UPDATE_TEMP%" (
     echo       [!!] Gagal mengunduh pembaruan.
-    echo       [i] Melanjutkan versi saat ini...
+    >>"%LOG_FILE%" echo [ERROR] Update download failed
     timeout /t 2 /nobreak >nul
     goto menu
 )
 
-:: Validasi sederhana agar file hasil download benar-benar BAT
+:: ----------------------------------------------------------------------
+:: Validasi file update.
+:: Tidak cukup hanya mencari CURRENT_VER.
+:: ----------------------------------------------------------------------
 findstr /i /c:"CURRENT_VER=" "%UPDATE_TEMP%" >nul 2>&1
-if not "%errorlevel%"=="0" (
-    echo       [!!] File update tidak valid.
-    del /f /q "%UPDATE_TEMP%" >nul 2>&1
-    timeout /t 2 /nobreak >nul
-    goto menu
+if not "%errorlevel%"=="0" goto update_invalid
+
+findstr /i /c:"APP_NAME=" "%UPDATE_TEMP%" >nul 2>&1
+if not "%errorlevel%"=="0" goto update_invalid
+
+findstr /i /c:":menu" "%UPDATE_TEMP%" >nul 2>&1
+if not "%errorlevel%"=="0" goto update_invalid
+
+findstr /i /c:":optimize" "%UPDATE_TEMP%" >nul 2>&1
+if not "%errorlevel%"=="0" goto update_invalid
+
+findstr /i /c:":restore" "%UPDATE_TEMP%" >nul 2>&1
+if not "%errorlevel%"=="0" goto update_invalid
+
+findstr /i /c:":diagnostics" "%UPDATE_TEMP%" >nul 2>&1
+if not "%errorlevel%"=="0" goto update_invalid
+
+:: ----------------------------------------------------------------------
+:: Pastikan file update memiliki versi yang sama dengan version.txt.
+:: ----------------------------------------------------------------------
+set "DOWNLOADED_VER="
+
+for /f "tokens=1,* delims==" %%A in ('findstr /i /b /c:"set "CURRENT_VER=" "%UPDATE_TEMP%" 2^>nul') do (
+    set "DOWNLOADED_VER=%%B"
 )
 
-echo       [OK] File update berhasil diunduh.
+if not defined DOWNLOADED_VER (
+    for /f "tokens=2 delims==" %%A in ('findstr /i /b "set \"CURRENT_VER=" "%UPDATE_TEMP%" 2^>nul') do (
+        set "DOWNLOADED_VER=%%~A"
+    )
+)
+
+set "DOWNLOADED_VER=!DOWNLOADED_VER:"=!"
+set "DOWNLOADED_VER=!DOWNLOADED_VER: =!"
+
+if not defined DOWNLOADED_VER goto update_invalid
+
+for /f "delims=" %%A in ('powershell -NoProfile -ExecutionPolicy Bypass -Command "$a=[version]'%DOWNLOADED_VER%';$b=[version]'%REMOTE_VER%';if($a -eq $b){'MATCH'}else{'MISMATCH'}" 2^>nul') do set "UPDATE_VERSION_STATUS=%%A"
+
+if /i not "%UPDATE_VERSION_STATUS%"=="MATCH" goto update_invalid
+
+echo       [OK] File update lolos validasi dasar.
 echo       [*] Menyiapkan proses penggantian file...
 echo.
 
-set "SELF_UPDATER=%TEMP%\BMJAYA2_self_updater_%RANDOM%.bat"
+set "SELF_UPDATER=%TEMP%\BMJAYA2_self_updater_%RANDOM%_%RANDOM%.bat"
+set "TARGET_FILE=%~f0"
+
 (
     echo @echo off
+    echo setlocal
     echo timeout /t 2 /nobreak ^>nul
-    echo copy /y "%UPDATE_TEMP%" "%~f0" ^>nul 2^>^&1
-    echo if exist "%UPDATE_TEMP%" del /f /q "%UPDATE_TEMP%" ^>nul 2^>^&1
-    echo start "" "%~f0"
+    echo copy /y "%UPDATE_TEMP%" "%TARGET_FILE%" ^>nul 2^>^&1
+    echo if errorlevel 1 exit /b 1
+    echo del /f /q "%UPDATE_TEMP%" ^>nul 2^>^&1
+    echo start "" "%TARGET_FILE%"
     echo del /f /q "%%~f0" ^>nul 2^>^&1
 ) > "%SELF_UPDATER%"
 
 start "" /min "%SELF_UPDATER%"
-exit /b
+
+>>"%LOG_FILE%" echo [OK] Update prepared: v%REMOTE_VER%
+>>"%LOG_FILE%" echo [INFO] Optimizer restarted after update
+
+del /f /q "%LOCK_FILE%" >nul 2>&1
+set "LOCK_CREATED=0"
+
+exit /b 0
+
+:update_invalid
+echo       [!!] File update tidak valid.
+echo       [i] File lama tetap digunakan.
+>>"%LOG_FILE%" echo [ERROR] Invalid update package
+del /f /q "%UPDATE_TEMP%" >nul 2>&1
+timeout /t 2 /nobreak >nul
+goto menu
 
 :: ======================================================================
 :: MENU UTAMA
@@ -145,28 +294,37 @@ exit /b
 :menu
 cls
 echo.
-echo  ============================================================================
+echo  ==============================================================================
 echo       SYSTEM OPTIMIZER WINDOWS 10 HDD - BM JAYA 2 - v%CURRENT_VER%
-echo  ============================================================================
+echo  ==============================================================================
 echo       Pengembang : Khairullah Irfansyah, S.Kom
 echo       Unit       : BM JAYA 2
-echo  ============================================================================
+echo  ==============================================================================
 echo.
-echo       SISTEM:
-echo.
+echo       SISTEM
+echo       ----------------------------------------------------------------------------
 echo       Windows    : %WIN_NAME%
 echo       Komputer   : %COMPUTERNAME%
+echo       System     : %WIN_VERSION%
 echo       Backup     : %BACKUP_DIR%
 echo.
-echo  ----------------------------------------------------------------------------
-echo       PILIHAN MENU:
+echo       STATUS BACKUP:
+if exist "%BACKUP_MARKER%" (
+    echo       [OK] Backup ORIGINAL tersedia.
+    echo       [i] Restore akan kembali ke kondisi sebelum optimasi pertama.
+) else (
+    echo       [--] Backup ORIGINAL belum dibuat.
+)
+echo.
+echo  ------------------------------------------------------------------------------
+echo       PILIHAN MENU
 echo.
 echo       [1] Jalankan Optimasi HDD - POS Safe Mode
-echo       [2] Kembalikan Pengaturan Sebelum Optimasi
+echo       [2] Kembalikan Pengaturan Sebelum Optimasi Pertama
 echo       [3] Pemeriksaan Sistem
 echo       [4] Keluar
 echo.
-echo  ============================================================================
+echo  ==============================================================================
 choice /C 1234 /N /M "  Masukkan pilihan Anda [1-4] : "
 if errorlevel 4 goto exit
 if errorlevel 3 goto diagnostics
@@ -179,9 +337,9 @@ if errorlevel 1 goto optimize
 :optimize
 cls
 echo.
-echo  ============================================================================
+echo  ==============================================================================
 echo                  OPTIMASI WINDOWS 10 HDD - POS SAFE MODE
-echo  ============================================================================
+echo  ==============================================================================
 echo.
 echo       Target:
 echo       - Windows 10
@@ -190,66 +348,99 @@ echo       - Komputer kasir / POS
 echo       - Mengurangi aktivitas disk background
 echo       - Menjaga database, printer dan jaringan
 echo.
-echo  ============================================================================
+echo       Catatan:
+echo       - Aman dijalankan berulang kali.
+echo       - Backup ORIGINAL hanya dibuat satu kali.
+echo       - Backup tidak ditimpa oleh optimasi berikutnya.
+echo.
+echo  ==============================================================================
+
+:: ----------------------------------------------------------------------
+:: CEK WINDOWS
+:: ----------------------------------------------------------------------
+if /i not "%WIN_NAME%"=="Windows 10" (
+    echo.
+    echo       [!] Sistem ini tidak terdeteksi sebagai Windows 10.
+    echo       [i] Optimizer ini dirancang khusus untuk Windows 10.
+    echo.
+    choice /C YN /N /M "  Tetap lanjutkan? [Y/N] : "
+    if errorlevel 2 goto menu
+)
 
 :: ----------------------------------------------------------------------
 :: DETEKSI MEDIA
 :: ----------------------------------------------------------------------
 echo.
 echo  [*] Mendeteksi media penyimpanan...
+
 set "HDD_FOUND=0"
 set "SSD_FOUND=0"
-set "DISK_INFO="
+set "MEDIA_DETECTION=UNKNOWN"
 
-for /f "skip=1 tokens=*" %%A in ('wmic diskdrive get Model^,MediaType 2^>nul') do (
-    if not defined DISK_INFO if not "%%A"=="" set "DISK_INFO=%%A"
+where wmic >nul 2>&1
+if "%errorlevel%"=="0" (
+    wmic diskdrive get MediaType 2>nul | findstr /i "Fixed hard disk" >nul 2>&1
+    if "%errorlevel%"=="0" set "HDD_FOUND=1"
+
+    wmic diskdrive get Model 2>nul | findstr /i "SSD NVMe" >nul 2>&1
+    if "%errorlevel%"=="0" set "SSD_FOUND=1"
 )
-
-wmic diskdrive get MediaType 2>nul | findstr /i "Fixed hard disk" >nul 2>&1
-if "%errorlevel%"=="0" set "HDD_FOUND=1"
-
-wmic diskdrive get Model 2>nul | findstr /i "SSD NVMe" >nul 2>&1
-if "%errorlevel%"=="0" set "SSD_FOUND=1"
 
 if "%SSD_FOUND%"=="1" (
-    echo       [!] SSD/NVMe terdeteksi pada sistem.
-    echo       [i] Optimizer tetap berjalan dalam mode POS Safe.
+    set "MEDIA_DETECTION=SSD/NVMe"
+    echo       [i] SSD/NVMe terdeteksi.
+    echo       [i] POS Safe Mode tetap digunakan.
 ) else if "%HDD_FOUND%"=="1" (
+    set "MEDIA_DETECTION=HDD"
     echo       [OK] HDD terdeteksi.
 ) else (
-    echo       [i] Tipe media tidak dapat dipastikan secara otomatis.
-    echo       [i] Mode POS Safe tetap digunakan.
+    echo       [i] Tipe media tidak dapat dipastikan.
+    echo       [i] POS Safe Mode tetap digunakan.
 )
 
+>>"%LOG_FILE%" echo [INFO] Media: %MEDIA_DETECTION%
+
 :: ----------------------------------------------------------------------
-:: CEK RUANG DISK
+:: CEK RUANG DRIVE
 :: ----------------------------------------------------------------------
 echo.
 echo  [*] Memeriksa ruang drive sistem...
+
+set "FREE_SPACE="
 for /f "tokens=3" %%A in ('dir "%SystemDrive%\" ^| findstr /i "bytes free"') do set "FREE_SPACE=%%A"
+
 echo       Drive sistem : %SystemDrive%
 if defined FREE_SPACE echo       Ruang kosong : %FREE_SPACE%
 
 :: ----------------------------------------------------------------------
-:: BACKUP
+:: BACKUP ORIGINAL
 :: ----------------------------------------------------------------------
 echo.
-echo  [*] Memeriksa backup konfigurasi...
+echo  [*] Memeriksa backup ORIGINAL...
 
-if not exist "%BACKUP_FILE%" goto create_backup
-echo.
-echo       [OK] Backup konfigurasi sudah tersedia.
-echo       [i] Backup tidak akan ditimpa untuk menjaga kondisi asli.
-echo.
-goto backup_done
+if exist "%BACKUP_MARKER%" (
+    echo       [OK] Backup ORIGINAL sudah tersedia.
+    echo       [i] Backup tidak ditimpa.
+    echo       [i] Optimasi dapat dijalankan berulang kali.
+    goto backup_done
+)
 
-:create_backup
+if exist "%BACKUP_FILE%" (
+    echo       [!] File backup ditemukan tetapi marker tidak ada.
+    echo       [i] Backup dianggap tidak lengkap.
+    echo       [*] Membuat backup baru.
+    del /f /q "%BACKUP_FILE%" >nul 2>&1
+)
+
 echo.
-echo  [*] Membuat backup konfigurasi ASLI sebelum optimasi...
+echo  [*] Membuat backup konfigurasi ORIGINAL...
+echo       Kondisi saat ini akan disimpan sebagai baseline restore.
 echo.
 
 > "%BACKUP_FILE%" echo # SYSTEM OPTIMIZER WINDOWS 10 HDD v%CURRENT_VER%
+>>"%BACKUP_FILE%" echo # BACKUP TYPE: ORIGINAL
 >>"%BACKUP_FILE%" echo # Backup dibuat: %date% %time%
+>>"%BACKUP_FILE%" echo # Computer: %COMPUTERNAME%
 >>"%BACKUP_FILE%" echo # Format service: SERVICE^|NAME^|START^|DELAYED^|STATE
 >>"%BACKUP_FILE%" echo.
 
@@ -260,23 +451,51 @@ call :BackupService DoSvc
 call :BackupService dmwappushservice
 call :BackupService BITS
 
-:: Backup registry yang memang diubah
-reg export "HKCU\Control Panel\Desktop" "%BACKUP_DIR%\desktop.reg" /y >nul 2>&1
-reg export "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" "%BACKUP_DIR%\visualeffects.reg" /y >nul 2>&1
-reg export "HKCU\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" "%BACKUP_DIR%\backgroundapps.reg" /y >nul 2>&1
+:: ----------------------------------------------------------------------
+:: Backup registry VALUE yang benar-benar diubah.
+:: ----------------------------------------------------------------------
+call :BackupRegValue "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" "VisualFXSetting"
+call :BackupRegValue "HKCU\Control Panel\Desktop\WindowMetrics" "MinAnimate"
+call :BackupRegValue "HKCU\Control Panel\Desktop" "FontSmoothing"
+call :BackupRegValue "HKCU\Control Panel\Desktop" "MenuShowDelay"
+call :BackupRegValue "HKCU\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" "GlobalUserDisabled"
 
+:: ----------------------------------------------------------------------
 :: Backup Power Plan
+:: ----------------------------------------------------------------------
 powercfg /getactivescheme > "%BACKUP_DIR%\powerplan.txt" 2>&1
 
+:: ----------------------------------------------------------------------
 :: Backup Hibernation
+:: ----------------------------------------------------------------------
 reg query "HKLM\SYSTEM\CurrentControlSet\Control\Power" /v HibernateEnabled > "%BACKUP_DIR%\hibernate.txt" 2>&1
 
+:: ----------------------------------------------------------------------
 :: Backup NTFS behavior
+:: ----------------------------------------------------------------------
 fsutil behavior query disablelastaccess > "%BACKUP_DIR%\lastaccess.txt" 2>&1
 
-echo       [OK] Backup konfigurasi berhasil dibuat.
+:: ----------------------------------------------------------------------
+:: Tandai backup selesai hanya jika file utama tersedia.
+:: ----------------------------------------------------------------------
+if exist "%BACKUP_FILE%" (
+    >"%BACKUP_MARKER%" echo BACKUP COMPLETE
+    >>"%BACKUP_MARKER%" echo VERSION=%CURRENT_VER%
+    >>"%BACKUP_MARKER%" echo COMPUTER=%COMPUTERNAME%
+    >>"%BACKUP_MARKER%" echo DATE=%date% %time%
+    echo       [OK] Backup ORIGINAL berhasil dibuat.
+    >>"%LOG_FILE%" echo [OK] Original backup created
+) else (
+    echo       [!!] Backup gagal dibuat.
+    >>"%LOG_FILE%" echo [ERROR] Original backup creation failed
+    echo.
+    echo       Optimasi dibatalkan demi keamanan.
+    pause
+    goto menu
+)
 
 :backup_done
+
 >>"%LOG_FILE%" echo.
 >>"%LOG_FILE%" echo ============================================================
 >>"%LOG_FILE%" echo OPTIMIZATION STARTED - %date% %time%
@@ -284,9 +503,9 @@ echo       [OK] Backup konfigurasi berhasil dibuat.
 >>"%LOG_FILE%" echo VERSION: %CURRENT_VER%
 
 echo.
-echo  ============================================================================
+echo  ==============================================================================
 echo                              MULAI OPTIMASI
-echo  ============================================================================
+echo  ==============================================================================
 
 :: ======================================================================
 :: SERVICE
@@ -296,68 +515,27 @@ echo  [BAGIAN 1] SERVICE BACKGROUND
 echo  ----------------------------------------------------------------------------
 
 echo  [1/6] Windows Search...
-net stop "WSearch" >nul 2>&1
-sc config "WSearch" start= disabled >nul 2>&1
-if "%errorlevel%"=="0" (
-    echo       [OK] Windows Search dinonaktifkan.
-    >>"%LOG_FILE%" echo [OK] WSearch disabled
-) else (
-    echo       [!!] Windows Search gagal diubah.
-    >>"%LOG_FILE%" echo [ERROR] WSearch
-)
+call :SetService WSearch disabled
+echo.
 
 echo  [2/6] SysMain...
-net stop "SysMain" >nul 2>&1
-sc config "SysMain" start= disabled >nul 2>&1
-if "%errorlevel%"=="0" (
-    echo       [OK] SysMain dinonaktifkan untuk mengurangi aktivitas HDD.
-    >>"%LOG_FILE%" echo [OK] SysMain disabled
-) else (
-    echo       [!!] SysMain gagal diubah.
-    >>"%LOG_FILE%" echo [ERROR] SysMain
-)
+call :SetService SysMain disabled
+echo.
 
 echo  [3/6] DiagTrack...
-net stop "DiagTrack" >nul 2>&1
-sc config "DiagTrack" start= disabled >nul 2>&1
-if "%errorlevel%"=="0" (
-    echo       [OK] DiagTrack dinonaktifkan.
-    >>"%LOG_FILE%" echo [OK] DiagTrack disabled
-) else (
-    echo       [i] DiagTrack tidak tersedia / tidak dapat diubah.
-    >>"%LOG_FILE%" echo [INFO] DiagTrack unavailable
-)
+call :SetService DiagTrack disabled
+echo.
 
 echo  [4/6] Delivery Optimization...
-net stop "DoSvc" >nul 2>&1
-sc config "DoSvc" start= demand >nul 2>&1
-if "%errorlevel%"=="0" (
-    echo       [OK] Delivery Optimization diatur Manual.
-    >>"%LOG_FILE%" echo [OK] DoSvc manual
-) else (
-    echo       [!!] Delivery Optimization gagal diubah.
-    >>"%LOG_FILE%" echo [ERROR] DoSvc
-)
+call :SetService DoSvc demand
+echo.
 
 echo  [5/6] WAP Push Service...
-sc config "dmwappushservice" start= demand >nul 2>&1
-if "%errorlevel%"=="0" (
-    echo       [OK] WAP Push Service diatur Manual.
-    >>"%LOG_FILE%" echo [OK] dmwappushservice manual
-) else (
-    echo       [i] WAP Push Service tidak tersedia.
-    >>"%LOG_FILE%" echo [INFO] dmwappushservice unavailable
-)
+call :SetService dmwappushservice demand
+echo.
 
 echo  [6/6] Background Intelligent Transfer Service...
-sc config "BITS" start= demand >nul 2>&1
-if "%errorlevel%"=="0" (
-    echo       [OK] BITS diatur Manual / On-Demand.
-    >>"%LOG_FILE%" echo [OK] BITS manual
-) else (
-    echo       [!!] BITS gagal diubah.
-    >>"%LOG_FILE%" echo [ERROR] BITS
-)
+call :SetService BITS demand
 
 :: ======================================================================
 :: SYSTEM & UI
@@ -366,7 +544,7 @@ echo.
 echo  [BAGIAN 2] SYSTEM & UI
 echo  ----------------------------------------------------------------------------
 
-echo  [1/7] Hibernation...
+echo  [1/6] Hibernation...
 powercfg /h off >nul 2>&1
 if "%errorlevel%"=="0" (
     echo       [OK] Hibernation dinonaktifkan.
@@ -376,14 +554,29 @@ if "%errorlevel%"=="0" (
     >>"%LOG_FILE%" echo [ERROR] Hibernation
 )
 
-echo  [2/7] Visual Effects...
-reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f >nul 2>&1
-reg add "HKCU\Control Panel\Desktop\WindowMetrics" /v MinAnimate /t REG_SZ /d 0 /f >nul 2>&1
-reg add "HKCU\Control Panel\Desktop" /v FontSmoothing /t REG_SZ /d 2 /f >nul 2>&1
-echo       [OK] Visual Effects dioptimalkan.
->>"%LOG_FILE%" echo [OK] Visual Effects
+echo.
+echo  [2/6] Visual Effects...
+set "REG_OK=1"
 
-echo  [3/7] MenuShowDelay...
+reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f >nul 2>&1
+if errorlevel 1 set "REG_OK=0"
+
+reg add "HKCU\Control Panel\Desktop\WindowMetrics" /v MinAnimate /t REG_SZ /d 0 /f >nul 2>&1
+if errorlevel 1 set "REG_OK=0"
+
+reg add "HKCU\Control Panel\Desktop" /v FontSmoothing /t REG_SZ /d 2 /f >nul 2>&1
+if errorlevel 1 set "REG_OK=0"
+
+if "%REG_OK%"=="1" (
+    echo       [OK] Visual Effects dioptimalkan.
+    >>"%LOG_FILE%" echo [OK] Visual Effects
+) else (
+    echo       [!!] Sebagian Visual Effects gagal diubah.
+    >>"%LOG_FILE%" echo [ERROR] Visual Effects partial failure
+)
+
+echo.
+echo  [3/6] MenuShowDelay...
 reg add "HKCU\Control Panel\Desktop" /v MenuShowDelay /t REG_SZ /d 0 /f >nul 2>&1
 if "%errorlevel%"=="0" (
     echo       [OK] MenuShowDelay = 0 ms.
@@ -393,23 +586,15 @@ if "%errorlevel%"=="0" (
     >>"%LOG_FILE%" echo [ERROR] MenuShowDelay
 )
 
-echo  [4/7] AutoEndTasks...
-reg add "HKCU\Control Panel\Desktop" /v AutoEndTasks /t REG_SZ /d 0 /f >nul 2>&1
-if "%errorlevel%"=="0" (
-    echo       [OK] AutoEndTasks tetap aman.
-    >>"%LOG_FILE%" echo [OK] AutoEndTasks
-) else (
-    echo       [!!] AutoEndTasks gagal diubah.
-    >>"%LOG_FILE%" echo [ERROR] AutoEndTasks
-)
-
-echo  [5/7] Shutdown Timeout...
+echo.
+echo  [4/6] Shutdown Timeout...
 echo       [OK] WaitToKillAppTimeout tidak diubah.
 echo       [OK] WaitToKillServiceTimeout tidak diubah.
 echo       [OK] Database/POS diberikan shutdown normal.
 >>"%LOG_FILE%" echo [OK] Shutdown timeout untouched
 
-echo  [6/7] NTFS Last Access...
+echo.
+echo  [5/6] NTFS Last Access...
 fsutil behavior set disablelastaccess 1 >nul 2>&1
 if "%errorlevel%"=="0" (
     echo       [OK] NTFS Last Access Update dinonaktifkan.
@@ -419,7 +604,8 @@ if "%errorlevel%"=="0" (
     >>"%LOG_FILE%" echo [ERROR] NTFS last access
 )
 
-echo  [7/7] Background Apps...
+echo.
+echo  [6/6] Background Apps...
 reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" /v GlobalUserDisabled /t REG_DWORD /d 1 /f >nul 2>&1
 if "%errorlevel%"=="0" (
     echo       [OK] Background Apps dibatasi.
@@ -433,20 +619,16 @@ if "%errorlevel%"=="0" (
 :: CLEANUP
 :: ======================================================================
 echo.
-echo  [BAGIAN 3] CLEANUP
+echo  [BAGIAN 3] CLEANUP KONSERVATIF
 echo  ----------------------------------------------------------------------------
 
 echo  [1/4] User TEMP...
-del /f /q "%TEMP%\*.*" >nul 2>&1
-for /d %%D in ("%TEMP%\*") do rd /s /q "%%D" >nul 2>&1
-echo       [OK] TEMP user dibersihkan.
->>"%LOG_FILE%" echo [OK] User TEMP cleanup
+call :CleanOldTemp "%TEMP%" 1
+echo.
 
 echo  [2/4] Windows TEMP...
-del /f /q "%SystemRoot%\Temp\*.*" >nul 2>&1
-for /d %%D in ("%SystemRoot%\Temp\*") do rd /s /q "%%D" >nul 2>&1
-echo       [OK] Windows TEMP dibersihkan.
->>"%LOG_FILE%" echo [OK] Windows TEMP cleanup
+call :CleanOldTemp "%SystemRoot%\Temp" 1
+echo.
 
 echo  [3/4] DNS Cache...
 ipconfig /flushdns >nul 2>&1
@@ -458,6 +640,7 @@ if "%errorlevel%"=="0" (
     >>"%LOG_FILE%" echo [ERROR] DNS flush
 )
 
+echo.
 echo  [4/4] Recycle Bin...
 echo       [OK] Recycle Bin tidak dihapus paksa.
 >>"%LOG_FILE%" echo [OK] Recycle Bin untouched
@@ -469,12 +652,13 @@ echo.
 echo  [BAGIAN 4] POWER PLAN
 echo  ----------------------------------------------------------------------------
 echo  [*] Mengaktifkan High Performance...
+
 powercfg /setactive SCHEME_MIN >nul 2>&1
 if "%errorlevel%"=="0" (
     echo       [OK] High Performance diaktifkan.
     >>"%LOG_FILE%" echo [OK] High Performance
 ) else (
-    echo       [!!] High Performance tidak tersedia.
+    echo       [!!] High Performance tidak tersedia / gagal diaktifkan.
     >>"%LOG_FILE%" echo [ERROR] High Performance
 )
 
@@ -486,15 +670,23 @@ echo  [BAGIAN 5] DISK MAINTENANCE
 echo  ----------------------------------------------------------------------------
 
 echo  [1/3] Status disk...
-wmic diskdrive get Model,Status 2>nul
-echo.
+where wmic >nul 2>&1
+if "%errorlevel%"=="0" (
+    wmic diskdrive get Model,Status 2>nul
+) else (
+    echo       [i] WMIC tidak tersedia.
+    echo       [i] Pemeriksaan detail disk dilewati.
+)
 
+echo.
 echo  [2/3] File system...
 fsutil dirty query %SystemDrive% >nul 2>&1
 if "%errorlevel%"=="0" (
-    echo       [OK] Pemeriksaan file system dapat dilakukan.
+    echo       [OK] Status file system dapat diperiksa.
+    >>"%LOG_FILE%" echo [OK] File system status readable
 ) else (
     echo       [!!] Status file system tidak dapat dibaca.
+    >>"%LOG_FILE%" echo [ERROR] File system status
 )
 
 echo.
@@ -509,38 +701,45 @@ echo       [INFO] Windows Optimize Drives tetap menangani maintenance.
 >>"%LOG_FILE%" echo OPTIMIZATION FINISHED - %date% %time%
 
 echo.
-echo  ============================================================================
-echo                            OPTIMASI BERHASIL
-echo  ============================================================================
+echo  ==============================================================================
+echo                            OPTIMASI SELESAI
+echo  ==============================================================================
 echo.
 echo       SYSTEM OPTIMIZER WINDOWS 10 HDD v%CURRENT_VER%
 echo.
-echo       [OK] Windows Search         : Disabled
-echo       [OK] SysMain                : Disabled
-echo       [OK] Telemetry              : Reduced
-echo       [OK] Delivery Optimization  : Manual
-echo       [OK] Background Apps        : Reduced
-echo       [OK] Visual Effects         : Optimized
-echo       [OK] NTFS                   : Optimized
-echo       [OK] DNS Cache              : Flushed
-echo       [OK] TEMP                   : Cleaned
-echo       [OK] Power Plan             : High Performance
+echo       [OK] Windows Search          : Disabled
+echo       [OK] SysMain                 : Disabled
+echo       [OK] Telemetry               : Reduced
+echo       [OK] Delivery Optimization   : Manual
+echo       [OK] WAP Push Service        : Manual
+echo       [OK] BITS                    : Manual
+echo       [OK] Background Apps         : Reduced
+echo       [OK] Visual Effects          : Optimized
+echo       [OK] NTFS                    : Optimized
+echo       [OK] DNS Cache               : Flushed
+echo       [OK] TEMP                    : Conservative Cleanup
+echo       [OK] Power Plan              : High Performance
 echo.
-echo  ----------------------------------------------------------------------------
+echo  ------------------------------------------------------------------------------
 echo       DATABASE / POS SAFETY
 echo.
 echo       [OK] Shutdown timeout tidak dipangkas.
 echo       [OK] Tidak ada kill paksa database.
 echo       [OK] Printer tidak disentuh.
-echo       [OK] Network service penting tidak dimatikan.
-echo       [OK] Backup konfigurasi telah dibuat.
-echo  ----------------------------------------------------------------------------
+echo       [OK] Network adapter tidak disentuh.
+echo       [OK] Defragmentasi tidak dipaksa.
+echo       [OK] Backup ORIGINAL tetap aman.
+echo.
+echo       Backup:
+echo       %BACKUP_FILE%
 echo.
 echo       Log:
 echo       %LOG_FILE%
 echo.
-echo       [!] Restart Windows disarankan.
-echo  ============================================================================
+echo       [!] Restart Windows disarankan setelah optimasi.
+echo       [i] Optimizer dapat dijalankan kembali tanpa membuat
+echo           backup baru.
+echo  ==============================================================================
 echo.
 pause
 goto menu
@@ -551,40 +750,61 @@ goto menu
 :restore
 cls
 echo.
-echo  ============================================================================
-echo                    RESTORE KONFIGURASI SEBELUM OPTIMASI
-echo  ============================================================================
+echo  ==============================================================================
+echo                    RESTORE KONFIGURASI ORIGINAL
+echo  ==============================================================================
 echo.
+echo       Restore akan mengembalikan:
+echo       - Service yang diubah
+echo       - Registry value yang diubah
+echo       - Hibernation
+echo       - NTFS Last Access
+echo       - Power Plan
+echo.
+echo       Catatan:
+echo       Backup yang digunakan adalah kondisi ORIGINAL sebelum
+echo       optimasi pertama, bukan kondisi sebelum eksekusi terakhir.
+echo.
+echo  ==============================================================================
 
-if not exist "%BACKUP_FILE%" (
-    echo       [!!] Backup konfigurasi tidak ditemukan.
+if not exist "%BACKUP_MARKER%" (
+    echo.
+    echo       [!!] Backup ORIGINAL tidak ditemukan.
     echo.
     echo       Restore dibatalkan demi keamanan.
-    echo.
-    echo       Lokasi:
-    echo       %BACKUP_FILE%
     echo.
     pause
     goto menu
 )
 
+if not exist "%BACKUP_FILE%" (
+    echo.
+    echo       [!!] File backup utama tidak ditemukan.
+    echo       [i] Restore dibatalkan.
+    echo.
+    pause
+    goto menu
+)
+
+echo.
 echo       Backup ditemukan:
 echo       %BACKUP_FILE%
-echo.
-echo       Restore akan mengembalikan konfigurasi berdasarkan
-echo       kondisi yang disimpan SEBELUM optimasi.
 echo.
 choice /C YN /N /M "  Lanjutkan Restore? [Y/N] : "
 if errorlevel 2 goto menu
 
 echo.
-echo  ============================================================================
+echo  ==============================================================================
 echo                              MULAI RESTORE
-echo  ============================================================================
+echo  ==============================================================================
 
+:: ======================================================================
+:: RESTORE SERVICE
+:: ======================================================================
 echo.
 echo  [BAGIAN 1] RESTORE SERVICE
 echo  ----------------------------------------------------------------------------
+
 call :RestoreService WSearch
 call :RestoreService SysMain
 call :RestoreService DiagTrack
@@ -592,35 +812,38 @@ call :RestoreService DoSvc
 call :RestoreService dmwappushservice
 call :RestoreService BITS
 
+:: ======================================================================
+:: RESTORE REGISTRY
+:: ======================================================================
 echo.
 echo  [BAGIAN 2] RESTORE REGISTRY
 echo  ----------------------------------------------------------------------------
 
-if exist "%BACKUP_DIR%\desktop.reg" (
-    reg import "%BACKUP_DIR%\desktop.reg" >nul 2>&1
-    if "%errorlevel%"=="0" (echo       [OK] Desktop registry dipulihkan.) else (echo       [!!] Desktop registry gagal dipulihkan.)
-) else echo       [!!] Desktop backup tidak ditemukan.
+call :RestoreRegValue "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" "VisualFXSetting"
+call :RestoreRegValue "HKCU\Control Panel\Desktop\WindowMetrics" "MinAnimate"
+call :RestoreRegValue "HKCU\Control Panel\Desktop" "FontSmoothing"
+call :RestoreRegValue "HKCU\Control Panel\Desktop" "MenuShowDelay"
+call :RestoreRegValue "HKCU\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" "GlobalUserDisabled"
 
-if exist "%BACKUP_DIR%\visualeffects.reg" (
-    reg import "%BACKUP_DIR%\visualeffects.reg" >nul 2>&1
-    if "%errorlevel%"=="0" (echo       [OK] Visual Effects dipulihkan.) else (echo       [!!] Visual Effects gagal dipulihkan.)
-) else echo       [!!] Visual Effects backup tidak ditemukan.
-
-if exist "%BACKUP_DIR%\backgroundapps.reg" (
-    reg import "%BACKUP_DIR%\backgroundapps.reg" >nul 2>&1
-    if "%errorlevel%"=="0" (echo       [OK] Background Apps dipulihkan.) else (echo       [!!] Background Apps gagal dipulihkan.)
-) else echo       [!!] Background Apps backup tidak ditemukan.
-
+:: ======================================================================
+:: RESTORE HIBERNATION
+:: ======================================================================
 echo.
 echo  [BAGIAN 3] RESTORE HIBERNATION
 echo  ----------------------------------------------------------------------------
 call :RestoreHibernate
 
+:: ======================================================================
+:: RESTORE NTFS
+:: ======================================================================
 echo.
 echo  [BAGIAN 4] RESTORE NTFS
 echo  ----------------------------------------------------------------------------
 call :RestoreLastAccess
 
+:: ======================================================================
+:: RESTORE POWER PLAN
+:: ======================================================================
 echo.
 echo  [BAGIAN 5] RESTORE POWER PLAN
 echo  ----------------------------------------------------------------------------
@@ -629,11 +852,9 @@ call :RestorePowerPlan
 >>"%LOG_FILE%" echo RESTORE FINISHED - %date% %time%
 
 echo.
-echo  ============================================================================
+echo  ==============================================================================
 echo                              RESTORE SELESAI
-echo  ============================================================================
-echo.
-echo       Konfigurasi dikembalikan berdasarkan backup sebelum optimasi.
+echo  ==============================================================================
 echo.
 echo       [OK] Service
 echo       [OK] Registry
@@ -641,8 +862,11 @@ echo       [OK] Hibernation
 echo       [OK] NTFS
 echo       [OK] Power Plan
 echo.
+echo       Backup ORIGINAL TIDAK dihapus.
+echo       Anda masih dapat menjalankan optimasi kembali.
+echo.
 echo       [!] Restart Windows disarankan agar seluruh perubahan diterapkan.
-echo  ============================================================================
+echo  ==============================================================================
 echo.
 pause
 goto menu
@@ -653,29 +877,54 @@ goto menu
 :diagnostics
 cls
 echo.
-echo  ============================================================================
+echo  ==============================================================================
 echo                             SYSTEM DIAGNOSTICS
-echo  ============================================================================
+echo  ==============================================================================
 echo.
 echo  [1] INFORMASI WINDOWS
 echo  ----------------------------------------------------------------------------
 systeminfo | findstr /B /C:"OS Name" /C:"OS Version" /C:"System Type"
 echo.
+
 echo  [2] CPU
 echo  ----------------------------------------------------------------------------
-wmic cpu get Name,NumberOfCores,NumberOfLogicalProcessors /format:list 2>nul
+where wmic >nul 2>&1
+if "%errorlevel%"=="0" (
+    wmic cpu get Name,NumberOfCores,NumberOfLogicalProcessors /format:list 2>nul
+) else (
+    echo       [i] WMIC tidak tersedia.
+)
+
 echo.
 echo  [3] RAM
 echo  ----------------------------------------------------------------------------
-wmic computersystem get TotalPhysicalMemory /format:list 2>nul
+where wmic >nul 2>&1
+if "%errorlevel%"=="0" (
+    wmic computersystem get TotalPhysicalMemory /format:list 2>nul
+) else (
+    echo       [i] WMIC tidak tersedia.
+)
+
 echo.
 echo  [4] DISK
 echo  ----------------------------------------------------------------------------
-wmic diskdrive get Model,InterfaceType,MediaType,Size,Status 2>nul
+where wmic >nul 2>&1
+if "%errorlevel%"=="0" (
+    wmic diskdrive get Model,InterfaceType,MediaType,Size,Status 2>nul
+) else (
+    echo       [i] WMIC tidak tersedia pada sistem ini.
+)
+
 echo.
 echo  [5] DRIVE SISTEM
 echo  ----------------------------------------------------------------------------
-wmic logicaldisk where "DeviceID='%SystemDrive%'" get DeviceID,FreeSpace,Size 2>nul
+where wmic >nul 2>&1
+if "%errorlevel%"=="0" (
+    wmic logicaldisk where "DeviceID='%SystemDrive%'" get DeviceID,FreeSpace,Size 2>nul
+) else (
+    echo       [i] WMIC tidak tersedia.
+)
+
 echo.
 echo  [6] SERVICE
 echo  ----------------------------------------------------------------------------
@@ -685,35 +934,97 @@ call :ShowService DiagTrack
 call :ShowService DoSvc
 call :ShowService dmwappushservice
 call :ShowService BITS
+
 echo.
 echo  [7] POWER PLAN
 echo  ----------------------------------------------------------------------------
 powercfg /getactivescheme
+
 echo.
 echo  [8] NTFS LAST ACCESS
 echo  ----------------------------------------------------------------------------
 fsutil behavior query disablelastaccess
+
 echo.
 echo  [9] HIBERNATION
 echo  ----------------------------------------------------------------------------
 powercfg /a
+
 echo.
 echo  [10] BACKUP
 echo  ----------------------------------------------------------------------------
-if exist "%BACKUP_FILE%" (
-    echo       [OK] Backup tersedia.
+if exist "%BACKUP_MARKER%" (
+    echo       [OK] Backup ORIGINAL tersedia.
     echo       %BACKUP_FILE%
 ) else (
-    echo       [--] Backup belum dibuat.
+    echo       [--] Backup ORIGINAL belum dibuat.
 )
+
 echo.
-echo  ============================================================================
+echo  [11] OPTIMIZER LOCK
+echo  ----------------------------------------------------------------------------
+if exist "%LOCK_FILE%" (
+    echo       [OK] Instance optimizer sedang aktif.
+) else (
+    echo       [OK] Tidak ada lock aktif.
+)
+
+echo.
+echo  [12] LOG
+echo  ----------------------------------------------------------------------------
+echo       %LOG_FILE%
+
+echo.
+echo  ==============================================================================
 pause
 goto menu
 
 :: ======================================================================
+:: SET SERVICE
+:: ======================================================================
+:SetService
+set "SERVICE=%~1"
+set "TARGET_START=%~2"
+
+sc query "%SERVICE%" >nul 2>&1
+if errorlevel 1 (
+    echo       [i] %SERVICE% tidak tersedia pada Windows ini.
+    >>"%LOG_FILE%" echo [INFO] %SERVICE% unavailable
+    exit /b 0
+)
+
+if /i "%TARGET_START%"=="disabled" (
+    net stop "%SERVICE%" >nul 2>&1
+    sc config "%SERVICE%" start= disabled >nul 2>&1
+) else if /i "%TARGET_START%"=="demand" (
+    net stop "%SERVICE%" >nul 2>&1
+    sc config "%SERVICE%" start= demand >nul 2>&1
+) else (
+    echo       [!!] Target service tidak valid: %TARGET_START%
+    >>"%LOG_FILE%" echo [ERROR] Invalid service target
+    exit /b 1
+)
+
+if errorlevel 1 (
+    echo       [!!] %SERVICE% gagal dikonfigurasi.
+    >>"%LOG_FILE%" echo [ERROR] %SERVICE% configuration failed
+    exit /b 1
+)
+
+if /i "%TARGET_START%"=="disabled" (
+    echo       [OK] %SERVICE% dinonaktifkan.
+    >>"%LOG_FILE%" echo [OK] %SERVICE% disabled
+) else (
+    echo       [OK] %SERVICE% diatur Manual / On-Demand.
+    >>"%LOG_FILE%" echo [OK] %SERVICE% demand
+)
+
+exit /b 0
+
+:: ======================================================================
 :: BACKUP SERVICE
-:: Format: SERVICE|NAME|START|DELAYED|STATE
+:: Format:
+:: SERVICE|NAME|START|DELAYED|STATE
 :: ======================================================================
 :BackupService
 set "SERVICE=%~1"
@@ -721,21 +1032,55 @@ set "S_START="
 set "S_DELAYED=0"
 set "S_STATE=STOPPED"
 
-reg query "HKLM\SYSTEM\CurrentControlSet\Services\%SERVICE%" /v Start > "%TEMP%\bmj_start.tmp" 2>nul
-for /f "tokens=3" %%A in ('findstr /i "Start" "%TEMP%\bmj_start.tmp"') do set "S_START=%%A"
-del /f /q "%TEMP%\bmj_start.tmp" >nul 2>&1
+reg query "HKLM\SYSTEM\CurrentControlSet\Services\%SERVICE%" /v Start > "%TEMP%\bmj_start_%RANDOM%.tmp" 2>nul
+set "START_TMP=%TEMP%\bmj_start_%RANDOM%.tmp"
 
-reg query "HKLM\SYSTEM\CurrentControlSet\Services\%SERVICE%" /v DelayedAutoStart > "%TEMP%\bmj_delay.tmp" 2>nul
-for /f "tokens=3" %%A in ('findstr /i "DelayedAutoStart" "%TEMP%\bmj_delay.tmp"') do set "S_DELAYED=%%A"
-del /f /q "%TEMP%\bmj_delay.tmp" >nul 2>&1
+:: Ambil Start langsung tanpa mengandalkan file sementara yang sama.
+for /f "tokens=3" %%A in ('reg query "HKLM\SYSTEM\CurrentControlSet\Services\%SERVICE%" /v Start 2^>nul ^| findstr /i /r /c:"Start[ ]"') do (
+    set "S_START=%%A"
+)
 
-sc query "%SERVICE%" > "%TEMP%\bmj_state.tmp" 2>nul
-findstr /i "RUNNING" "%TEMP%\bmj_state.tmp" >nul 2>&1
+for /f "tokens=3" %%A in ('reg query "HKLM\SYSTEM\CurrentControlSet\Services\%SERVICE%" /v DelayedAutoStart 2^>nul ^| findstr /i /r /c:"DelayedAutoStart[ ]"') do (
+    set "S_DELAYED=%%A"
+)
+
+sc query "%SERVICE%" 2>nul | findstr /i "RUNNING" >nul 2>&1
 if "%errorlevel%"=="0" set "S_STATE=RUNNING"
-del /f /q "%TEMP%\bmj_state.tmp" >nul 2>&1
 
 if defined S_START (
     >>"%BACKUP_FILE%" echo SERVICE^|%SERVICE%^|%S_START%^|%S_DELAYED%^|%S_STATE%
+)
+
+del /f /q "%START_TMP%" >nul 2>&1
+
+exit /b 0
+
+:: ======================================================================
+:: BACKUP REGISTRY VALUE
+::
+:: Format:
+:: REG|KEY|VALUE|TYPE|DATA
+:: REGABSENT|KEY|VALUE
+:: ======================================================================
+:BackupRegValue
+set "REG_KEY=%~1"
+set "REG_VALUE=%~2"
+set "REG_TYPE="
+set "REG_DATA="
+set "REG_FOUND=0"
+
+for /f "skip=2 tokens=1,2,*" %%A in ('reg query "%REG_KEY%" /v "%REG_VALUE%" 2^>nul') do (
+    if /i "%%A"=="%REG_VALUE%" (
+        set "REG_FOUND=1"
+        set "REG_TYPE=%%B"
+        set "REG_DATA=%%C"
+    )
+)
+
+if "%REG_FOUND%"=="1" (
+    >>"%BACKUP_FILE%" echo REG^|%REG_KEY%^|%REG_VALUE%^|%REG_TYPE%^|%REG_DATA%
+) else (
+    >>"%BACKUP_FILE%" echo REGABSENT^|%REG_KEY%^|%REG_VALUE%
 )
 
 exit /b 0
@@ -757,10 +1102,13 @@ for /f "tokens=1-5 delims=|" %%A in ('findstr /i /c:"SERVICE^|%SERVICE%^|" "%BAC
 
 if not defined R_START (
     echo       [--] %SERVICE% tidak memiliki data backup.
+    >>"%LOG_FILE%" echo [INFO] %SERVICE% backup data unavailable
     exit /b 0
 )
 
 net stop "%SERVICE%" >nul 2>&1
+
+set "RESTORE_OK=1"
 
 if /i "%R_START%"=="0x2" (
     if /i "%R_DELAYED%"=="0x1" (
@@ -784,14 +1132,79 @@ if /i "%R_START%"=="2" (
 if /i "%R_START%"=="3" sc config "%SERVICE%" start= demand >nul 2>&1
 if /i "%R_START%"=="4" sc config "%SERVICE%" start= disabled >nul 2>&1
 
+if errorlevel 1 set "RESTORE_OK=0"
+
 if /i "%R_STATE%"=="RUNNING" (
     net start "%SERVICE%" >nul 2>&1
 ) else (
     net stop "%SERVICE%" >nul 2>&1
 )
 
-echo       [OK] %SERVICE% dikembalikan.
->>"%LOG_FILE%" echo [OK] Restored service %SERVICE%
+if "%RESTORE_OK%"=="1" (
+    echo       [OK] %SERVICE% dikembalikan.
+    >>"%LOG_FILE%" echo [OK] Restored service %SERVICE%
+) else (
+    echo       [!!] %SERVICE% gagal dipulihkan sepenuhnya.
+    >>"%LOG_FILE%" echo [ERROR] Restore service %SERVICE%
+)
+
+exit /b 0
+
+:: ======================================================================
+:: RESTORE REGISTRY VALUE
+:: ======================================================================
+:RestoreRegValue
+set "REG_KEY=%~1"
+set "REG_VALUE=%~2"
+set "R_REG_TYPE="
+set "R_REG_DATA="
+set "R_REG_FOUND=0"
+set "R_REG_ABSENT=0"
+
+:: Cari record REG lengkap
+for /f "tokens=1-5 delims=|" %%A in ('findstr /i /c:"REG^|%REG_KEY%^|%REG_VALUE%^|" "%BACKUP_FILE%"') do (
+    set "R_REG_TYPE=%%D"
+    set "R_REG_DATA=%%E"
+    set "R_REG_FOUND=1"
+)
+
+:: Cari record REGABSENT
+findstr /i /c:"REGABSENT^|%REG_KEY%^|%REG_VALUE%" "%BACKUP_FILE%" >nul 2>&1
+if "%errorlevel%"=="0" set "R_REG_ABSENT=1"
+
+if "%R_REG_FOUND%"=="1" (
+    reg add "%REG_KEY%" /v "%REG_VALUE%" /t "%R_REG_TYPE%" /d "%R_REG_DATA%" /f >nul 2>&1
+    if "%errorlevel%"=="0" (
+        echo       [OK] %REG_VALUE% dipulihkan.
+        >>"%LOG_FILE%" echo [OK] Restored registry %REG_VALUE%
+    ) else (
+        echo       [!!] %REG_VALUE% gagal dipulihkan.
+        >>"%LOG_FILE%" echo [ERROR] Registry restore %REG_VALUE%
+    )
+    exit /b 0
+)
+
+if "%R_REG_ABSENT%"=="1" (
+    reg delete "%REG_KEY%" /v "%REG_VALUE%" /f >nul 2>&1
+    if "%errorlevel%"=="0" (
+        echo       [OK] %REG_VALUE% dihapus kembali seperti kondisi awal.
+        >>"%LOG_FILE%" echo [OK] Removed originally absent registry %REG_VALUE%
+    ) else (
+        :: Jika memang sudah tidak ada, anggap kondisi sudah sesuai.
+        reg query "%REG_KEY%" /v "%REG_VALUE%" >nul 2>&1
+        if errorlevel 1 (
+            echo       [OK] %REG_VALUE% memang tidak ada seperti kondisi awal.
+            >>"%LOG_FILE%" echo [OK] Registry %REG_VALUE% already absent
+        ) else (
+            echo       [!!] %REG_VALUE% gagal dihapus.
+            >>"%LOG_FILE%" echo [ERROR] Registry delete %REG_VALUE%
+        )
+    )
+    exit /b 0
+)
+
+echo       [--] Data backup %REG_VALUE% tidak ditemukan.
+>>"%LOG_FILE%" echo [INFO] Registry backup unavailable %REG_VALUE%
 
 exit /b 0
 
@@ -801,20 +1214,38 @@ exit /b 0
 :RestoreHibernate
 if not exist "%BACKUP_DIR%\hibernate.txt" (
     echo       [!!] Backup Hibernation tidak ditemukan.
+    >>"%LOG_FILE%" echo [ERROR] Hibernate backup missing
     exit /b 0
 )
 
 set "HIBER_STATE="
-for /f "tokens=3" %%A in ('findstr /i "HibernateEnabled" "%BACKUP_DIR%\hibernate.txt"') do set "HIBER_STATE=%%A"
+
+for /f "tokens=3" %%A in ('findstr /i "HibernateEnabled" "%BACKUP_DIR%\hibernate.txt"') do (
+    set "HIBER_STATE=%%A"
+)
 
 if /i "%HIBER_STATE%"=="0x1" (
     powercfg /h on >nul 2>&1
-    echo       [OK] Hibernation diaktifkan kembali.
+    if "%errorlevel%"=="0" (
+        echo       [OK] Hibernation diaktifkan kembali.
+        >>"%LOG_FILE%" echo [OK] Hibernate restored ON
+    ) else (
+        echo       [!!] Hibernation gagal diaktifkan.
+        >>"%LOG_FILE%" echo [ERROR] Hibernate restore ON
+    )
 ) else if /i "%HIBER_STATE%"=="0x0" (
     powercfg /h off >nul 2>&1
-    echo       [OK] Hibernation tetap nonaktif seperti kondisi awal.
+    if "%errorlevel%"=="0" (
+        echo       [OK] Hibernation tetap nonaktif seperti kondisi awal.
+        >>"%LOG_FILE%" echo [OK] Hibernate restored OFF
+    ) else (
+        echo       [!!] Hibernation gagal dikembalikan.
+        >>"%LOG_FILE%" echo [ERROR] Hibernate restore OFF
+    )
 ) else (
     echo       [!!] Status Hibernation awal tidak dapat ditentukan.
+    echo       [i] Tidak ada perubahan dipaksakan.
+    >>"%LOG_FILE%" echo [ERROR] Hibernate original state unknown
 )
 
 exit /b 0
@@ -825,25 +1256,46 @@ exit /b 0
 :RestoreLastAccess
 if not exist "%BACKUP_DIR%\lastaccess.txt" (
     echo       [!!] Backup NTFS tidak ditemukan.
+    >>"%LOG_FILE%" echo [ERROR] NTFS backup missing
     exit /b 0
 )
 
 set "LASTACCESS_VALUE="
-for /f "tokens=1,* delims==" %%A in ('findstr /i "DisableLastAccess" "%BACKUP_DIR%\lastaccess.txt"') do set "LASTACCESS_VALUE=%%B"
 
-if defined LASTACCESS_VALUE (
-    echo %LASTACCESS_VALUE% | findstr /r /i "0x1 1" >nul 2>&1
-    if "%errorlevel%"=="0" (
-        fsutil behavior set disablelastaccess 1 >nul 2>&1
-        echo       [OK] NTFS Last Access dikembalikan ke kondisi awal.
-        exit /b 0
-    )
+:: Cari nilai setelah tanda "=".
+for /f "tokens=1,* delims==" %%A in ('findstr /i "DisableLastAccess" "%BACKUP_DIR%\lastaccess.txt"') do (
+    set "LASTACCESS_VALUE=%%B"
 )
 
-:: Jika nilai awal tidak terbaca dengan format yang dapat dipastikan,
-:: gunakan Windows default agar tidak meninggalkan kondisi optimasi.
-fsutil behavior set disablelastaccess 0 >nul 2>&1
-echo       [OK] NTFS Last Access dikembalikan ke konfigurasi Windows.
+if not defined LASTACCESS_VALUE (
+    echo       [!!] Nilai NTFS asli tidak dapat dibaca.
+    echo       [i] Tidak ada perubahan dipaksakan.
+    >>"%LOG_FILE%" echo [ERROR] Original NTFS value unreadable
+    exit /b 0
+)
+
+set "LASTACCESS_VALUE=!LASTACCESS_VALUE: =!"
+set "LASTACCESS_VALUE=!LASTACCESS_VALUE:	=!"
+
+:: Hanya menerima nilai numerik 0-3.
+echo(!LASTACCESS_VALUE!| findstr /r /x "[0-3]" >nul 2>&1
+if not "%errorlevel%"=="0" (
+    echo       [!!] Nilai NTFS backup tidak valid: %LASTACCESS_VALUE%
+    echo       [i] Tidak ada perubahan dipaksakan.
+    >>"%LOG_FILE%" echo [ERROR] Invalid NTFS backup value
+    exit /b 0
+)
+
+fsutil behavior set disablelastaccess %LASTACCESS_VALUE% >nul 2>&1
+
+if "%errorlevel%"=="0" (
+    echo       [OK] NTFS Last Access dikembalikan ke nilai awal: %LASTACCESS_VALUE%.
+    >>"%LOG_FILE%" echo [OK] NTFS restored: %LASTACCESS_VALUE%
+) else (
+    echo       [!!] NTFS Last Access gagal dipulihkan.
+    >>"%LOG_FILE%" echo [ERROR] NTFS restore failed
+)
+
 exit /b 0
 
 :: ======================================================================
@@ -851,26 +1303,67 @@ exit /b 0
 :: ======================================================================
 :RestorePowerPlan
 if not exist "%BACKUP_DIR%\powerplan.txt" (
-    powercfg /setactive SCHEME_BALANCED >nul 2>&1
-    echo       [i] Backup Power Plan tidak ditemukan. Balanced digunakan.
+    echo       [!!] Backup Power Plan tidak ditemukan.
+    echo       [i] Tidak ada perubahan dipaksakan.
+    >>"%LOG_FILE%" echo [ERROR] Power plan backup missing
     exit /b 0
 )
 
 set "OLD_PLAN="
-for /f "tokens=4" %%A in ('findstr /i "Power Scheme GUID" "%BACKUP_DIR%\powerplan.txt"') do set "OLD_PLAN=%%A"
 
-if defined OLD_PLAN (
-    powercfg /setactive %OLD_PLAN% >nul 2>&1
-    if "%errorlevel%"=="0" (
-        echo       [OK] Power Plan sebelumnya dipulihkan.
-    ) else (
-        powercfg /setactive SCHEME_BALANCED >nul 2>&1
-        echo       [i] Power Plan lama gagal dipulihkan. Balanced digunakan.
-    )
-) else (
-    powercfg /setactive SCHEME_BALANCED >nul 2>&1
-    echo       [i] Power Plan lama tidak dapat dibaca. Balanced digunakan.
+for /f "tokens=4" %%A in ('findstr /i "Power Scheme GUID" "%BACKUP_DIR%\powerplan.txt"') do (
+    if not defined OLD_PLAN set "OLD_PLAN=%%A"
 )
+
+if not defined OLD_PLAN (
+    echo       [!!] Power Plan lama tidak dapat dibaca.
+    echo       [i] Tidak dipaksa ke Balanced.
+    >>"%LOG_FILE%" echo [ERROR] Original power plan unreadable
+    exit /b 0
+)
+
+powercfg /setactive %OLD_PLAN% >nul 2>&1
+
+if "%errorlevel%"=="0" (
+    echo       [OK] Power Plan sebelumnya dipulihkan.
+    >>"%LOG_FILE%" echo [OK] Power plan restored: %OLD_PLAN%
+) else (
+    echo       [!!] Power Plan lama gagal dipulihkan.
+    echo       [i] Tidak mengganti dengan plan lain secara otomatis.
+    >>"%LOG_FILE%" echo [ERROR] Power plan restore failed
+)
+
+exit /b 0
+
+:: ======================================================================
+:: CLEANUP TEMP KONSERVATIF
+::
+:: Argumen:
+::   %1 = folder
+::   %2 = umur file minimum dalam hari
+::
+:: Menghindari penghapusan file TEMP yang baru dibuat.
+:: ======================================================================
+:CleanOldTemp
+set "CLEAN_DIR=%~1"
+set "CLEAN_DAYS=%~2"
+
+if not exist "%CLEAN_DIR%\" (
+    echo       [i] Folder TEMP tidak ditemukan.
+    >>"%LOG_FILE%" echo [INFO] Temp folder missing: %CLEAN_DIR%
+    exit /b 0
+)
+
+:: Hapus file lebih tua dari X hari.
+forfiles /p "%CLEAN_DIR%" /s /m *.* /d -%CLEAN_DAYS% /c "cmd /c del /f /q @path" >nul 2>&1
+
+:: Hapus folder kosong yang tersisa secara hati-hati.
+for /f "delims=" %%D in ('dir "%CLEAN_DIR%" /ad /b /s 2^>nul') do (
+    rd "%%D" >nul 2>&1
+)
+
+echo       [OK] TEMP lama dibersihkan secara konservatif.
+>>"%LOG_FILE%" echo [OK] Conservative TEMP cleanup: %CLEAN_DIR%
 
 exit /b 0
 
@@ -879,10 +1372,20 @@ exit /b 0
 :: ======================================================================
 :ShowService
 set "SERVICE=%~1"
+
 echo.
 echo       [%SERVICE%]
+
+sc query "%SERVICE%" >nul 2>&1
+if errorlevel 1 (
+    echo       Status       : Tidak tersedia
+    echo       Start Type   : Tidak tersedia
+    exit /b 0
+)
+
 sc query "%SERVICE%" | findstr /i "STATE"
 sc qc "%SERVICE%" | findstr /i "START_TYPE"
+
 exit /b 0
 
 :: ======================================================================
@@ -891,7 +1394,7 @@ exit /b 0
 :exit
 cls
 echo.
-echo  ============================================================================
+echo  ==============================================================================
 echo.
 echo                 SYSTEM OPTIMIZER WINDOWS 10 HDD
 echo                            BM JAYA 2 v%CURRENT_VER%
@@ -899,7 +1402,15 @@ echo.
 echo                    Terima kasih telah menggunakan
 echo                       System Optimizer HDD.
 echo.
-echo  ============================================================================
+echo  ==============================================================================
 echo.
+
+>>"%LOG_FILE%" echo EXIT - %date% %time%
+
+if "%LOCK_CREATED%"=="1" (
+    del /f /q "%LOCK_FILE%" >nul 2>&1
+)
+
 endlocal
 exit /b 0
+```
