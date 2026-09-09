@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 title SYSTEM OPTIMIZER WINDOWS 10 HDD - BM JAYA 2 v1.4
-mode con: cols=80 lines=32
+mode con: cols=80 lines=33
 color 0b
 
 :: ======================================================================
@@ -11,7 +11,6 @@ set "CURRENT_VER=1.4"
 set "APP_NAME=System Optimizer Windows 10 HDD"
 set "VER_URL=https://raw.githubusercontent.com/KURZIBNANAM/optimizer-hdd/main/version.txt"
 set "UPDATE_URL=https://raw.githubusercontent.com/KURZIBNANAM/optimizer-hdd/main/optimizer.bat"
-set "LOCK_FILE=%TEMP%\BMJAYA2_Optimizer.lock"
 
 :: ======================================================================
 :: CEK ADMINISTRATOR
@@ -29,19 +28,6 @@ if not "%errorlevel%"=="0" (
     pause
     exit /b 1
 )
-
-:: ======================================================================
-:: CEK INSTANCE GANDA (LOCKING SEDERHANA)
-:: ======================================================================
-if exist "%LOCK_FILE%" (
-    echo.
-    echo  [!] Program sedang berjalan di jendela lain.
-    echo      Jika tidak ada, hapus file: %LOCK_FILE%
-    echo.
-    pause
-    exit /b 1
-)
-> "%LOCK_FILE%" echo %date%-%time%
 
 :: ======================================================================
 :: AUTO UPDATE CERDAS (NON-BLOCKING JIKA OFFLINE)
@@ -64,7 +50,7 @@ for /f "usebackq tokens=1 delims= " %%A in (`curl -L -s --fail --connect-timeout
 )
 
 if not defined REMOTE_VER (
-    echo   [i] Offline / repository tidak dapat dijangkau. Melewati update.
+    echo   [i] Offline / repository tidak dapat dijangkau. Melewati update...
     timeout /t 1 /nobreak >nul
     goto MENU
 )
@@ -94,7 +80,6 @@ if /i "%IS_NEW%"=="YES" (
             echo timeout /t 1 /nobreak ^>nul
             echo copy /y "!UPDATER_TMP!" "%~f0" ^>nul
             echo del /f /q "!UPDATER_TMP!" ^>nul
-            echo del /f /q "%LOCK_FILE%" ^>nul
             echo start "" "%~f0"
             echo del /f /q "%%~f0" ^>nul
         ) > "!SELF_RUNNER!"
@@ -113,7 +98,9 @@ cls
 echo.
 echo  ==========================================================================
 echo   SYSTEM OPTIMIZER WINDOWS 10 HDD - BM JAYA 2 [v%CURRENT_VER%]
-echo   Target: Komputer Kasir / POS & PC Kantor Berbasis HDD
+echo   Pengembang : Khairullah Irfansyah, S.Kom
+echo   Unit       : BM JAYA 2
+echo   Target     : Komputer Kasir / POS ^& PC Kantor Berbasis HDD
 echo  ==========================================================================
 echo.
 echo   [1] Jalankan Optimasi HDD (POS Safe Mode)
@@ -139,8 +126,8 @@ echo   MEMULAI OPTIMASI HDD (POS SAFE MODE)
 echo  ==========================================================================
 echo.
 
-:: 1. Service Pembunuh Kinerja HDD (Background I/O Berat)
-echo   [1/5] Mengatur Windows Service...
+:: 1. Service Background I/O Berat
+echo   [1/6] Mengatur Windows Service...
 call :ManageService WSearch disabled
 call :ManageService SysMain disabled
 call :ManageService DiagTrack disabled
@@ -148,34 +135,43 @@ call :ManageService DoSvc demand
 call :ManageService dmwappushservice demand
 call :ManageService BITS demand
 
-:: 2. Matikan Hibernasi (Langsung menghemat 4 - 8 GB storage di Drive C:)
+:: 2. Matikan Hibernasi (Menghemat 4-8 GB drive C:)
 echo.
-echo   [2/5] Mengelola Storage ^& Hibernasi...
+echo   [2/6] Mengelola Storage ^& Hibernasi...
 powercfg /h off >nul 2>&1
-echo         - File hiberfil.sys dinonaktifkan (Kapasitas disk bertambah).
+echo         - File hiberfil.sys dinonaktifkan (Kapasitas C: bertambah).
 
 :: 3. Optimasi Responsivitas UI & Background Apps
 echo.
-echo   [3/5] Optimasi Responsivitas UI ^& Registry...
+echo   [3/6] Optimasi Responsivitas UI ^& Registry...
 reg add "HKCU\Control Panel\Desktop" /v MenuShowDelay /t REG_SZ /d 0 /f >nul 2>&1
 reg add "HKCU\Control Panel\Desktop\WindowMetrics" /v MinAnimate /t REG_SZ /d 0 /f >nul 2>&1
 reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" /v GlobalUserDisabled /t REG_DWORD /d 1 /f >nul 2>&1
+echo         - Animasi jendela ^& delay menu diminimalkan.
 
 :: 4. Matikan NTFS Last Access Write (Mengurangi beban tulis mekanik HDD)
 echo.
-echo   [4/5] Mengurangi Beban Write Disk (NTFS)...
+echo   [4/6] Mengurangi Beban Write Disk (NTFS)...
 fsutil behavior set disablelastaccess 1 >nul 2>&1
-echo         - Pencatatan akses baca file dinonaktifkan.
+echo         - Pencatatan waktu akses baca file dinonaktifkan.
 
-:: 5. Pembersihan File Sementara Tanpa Merusak Aplikasi Kasir Aktif
+:: 5. Pembersihan File Sementara Konservatif
 echo.
-echo   [5/5] Pembersihan Cache ^& File Temp Aman...
+echo   [5/6] Pembersihan Cache ^& File Temp Aman...
 ipconfig /flushdns >nul 2>&1
 call :CleanSafeTemp "%TEMP%"
 call :CleanSafeTemp "%SystemRoot%\Temp"
+echo         - Cache DNS ^& file temporary kadaluarsa dibersihkan.
 
-:: 6. Power Plan (High Performance untuk respons cepat proses transaksi)
+:: 6. Mode High Performance (Mencegah throttling daya CPU)
+echo.
+echo   [6/6] Mengaktifkan Mode High Performance...
 powercfg /setactive SCHEME_MIN >nul 2>&1
+if errorlevel 1 (
+    powercfg -duplicatescheme 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c >nul 2>&1
+    powercfg /setactive SCHEME_MIN >nul 2>&1
+)
+echo         - Power Plan disetel ke performa penuh.
 
 echo.
 echo  ==========================================================================
@@ -223,7 +219,7 @@ reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplicat
 powercfg /setactive SCHEME_BALANCED >nul 2>&1
 
 echo.
-echo   [OK] Pengaturan sistem telah dikembalikan ke kondisi default.
+echo   [OK] Seluruh pengaturan telah dikembalikan ke standar default Windows.
 echo.
 pause
 goto MENU
@@ -246,7 +242,7 @@ for %%S in (SysMain WSearch DiagTrack BITS) do (
 )
 
 echo.
-echo   [Status Disk ^& Storage]
+echo   [Status Drive Sistem]
 for /f "tokens=3" %%A in ('dir "%SystemDrive%\" ^| findstr /i "bytes free"') do set "FREE_MB=%%A"
 echo     - Sisa Ruang %SystemDrive% : %FREE_MB% bytes
 
@@ -285,14 +281,12 @@ exit /b 0
 :CleanSafeTemp
 set "TARGET_DIR=%~1"
 if not exist "%TARGET_DIR%\" exit /b 0
-:: Hapus file yang berumur lebih dari 1 hari agar file transaksi kasir yang aktif tidak korup
 forfiles /p "%TARGET_DIR%" /s /m *.* /d -1 /c "cmd /c del /f /q @path" >nul 2>&1
 exit /b 0
 
 :: ======================================================================
-:: KELUAR & BERSIHKAN MUTEX/LOCK
+:: KELUAR
 :: ======================================================================
 :QUIT
-del /f /q "%LOCK_FILE%" >nul 2>&1
 endlocal
 exit /b 0
