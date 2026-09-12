@@ -71,24 +71,32 @@ if /i "%IS_NEW%"=="YES" (
     set "UPDATER_TMP=%TEMP%\update_%RANDOM%.bat"
     curl -L -s --fail --connect-timeout 4 -m 20 -o "!UPDATER_TMP!" "%UPDATE_URL%" >nul 2>&1
     
-    findstr /i /c:":MENU" "!UPDATER_TMP!" >nul 2>&1
-    if "%errorlevel%"=="0" (
-        echo   [OK] Validasi berhasil. Memasang versi baru...
-        set "SELF_RUNNER=%TEMP%\replacer_%RANDOM%.bat"
-        (
-            echo @echo off
-            echo timeout /t 1 /nobreak ^>nul
-            echo copy /y "!UPDATER_TMP!" "%~f0" ^>nul
-            echo del /f /q "!UPDATER_TMP!" ^>nul
-            echo start "" "%~f0"
-            echo del /f /q "%%~f0" ^>nul
-        ) > "!SELF_RUNNER!"
-        start "" /min "!SELF_RUNNER!"
-        exit /b 0
-    ) else (
-        del /f /q "!UPDATER_TMP!" >nul 2>&1
-    )
+    findstr /i /c:":MENU" "!UPDATER_TMP!" >nul 2>&1 || goto SKIP_UPDATE
+    findstr /i /c:"Khairullah Irfansyah" "!UPDATER_TMP!" >nul 2>&1 || goto SKIP_UPDATE
+    findstr /i /c:"CURRENT_VER" "!UPDATER_TMP!" >nul 2>&1 || goto SKIP_UPDATE
+
+    echo   [OK] Validasi 3-titik berhasil. Memasang versi baru...
+    set "SELF_RUNNER=%TEMP%\replacer_%RANDOM%.bat"
+    (
+        echo @echo off
+        echo timeout /t 1 /nobreak ^>nul
+        echo copy /y "!UPDATER_TMP!" "%~f0" ^>nul
+        echo del /f /q "!UPDATER_TMP!" ^>nul
+        echo start "" "%~f0"
+        echo del /f /q "%%~f0" ^>nul
+    ) > "!SELF_RUNNER!"
+    start "" /min "!SELF_RUNNER!"
+    exit /b 0
 )
+goto MENU
+
+:SKIP_UPDATE
+if defined UPDATER_TMP (
+    echo   [!] Validasi gagal. File update tidak sah, ditolak.
+    del /f /q "!UPDATER_TMP!" >nul 2>&1
+    set "UPDATER_TMP="
+)
+timeout /t 2 /nobreak >nul
 
 :: ======================================================================
 :: MENU UTAMA
@@ -128,7 +136,10 @@ echo.
 
 :: 1. Deteksi Jenis Disk & Service Background I/O Berat
 echo   [1/8] Memeriksa Disk ^& Mengatur Windows Service...
+set "DISK_TYPE="
 for /f "tokens=*" %%A in ('powershell -NoProfile -Command "Get-PhysicalDisk | Where-Object { $_.DeviceID -eq (Get-Partition -DriveLetter C).DiskNumber } | Select-Object -ExpandProperty MediaType" 2^>nul') do set "DISK_TYPE=%%A"
+if not defined DISK_TYPE set "DISK_TYPE=HDD"
+echo         - Drive C: terdeteksi sebagai: %DISK_TYPE%
 if /i "%DISK_TYPE%"=="SSD" (
     echo         - Drive C: adalah SSD. Mengamankan SysMain...
     call :ManageService SysMain auto
@@ -170,13 +181,11 @@ if /i not "%DISK_TYPE%"=="SSD" (
     echo         - SSD terdeteksi, melewati tweak NTFS...
 )
 
-:: 5. Pembersihan Cache Windows Update
+:: 5. Pembersihan Cache Windows Update (Aman Diulang)
 echo.
 echo   [5/8] Membersihkan Cache Windows Update Lama...
-net stop wuauserv >nul 2>&1
-del /f /s /q "%SystemRoot%\SoftwareDistribution\Download\*.*" >nul 2>&1
-net start wuauserv >nul 2>&1
-echo         - Folder SoftwareDistribution dibersihkan.
+forfiles /p "%SystemRoot%\SoftwareDistribution\Download" /s /m *.* /d -7 /c "cmd /c del /f /q @path" >nul 2>&1
+echo         - File cache update lama (^>7 hari) dibersihkan.
 
 :: 6. Pembersihan File Sementara Konservatif
 echo.
@@ -250,6 +259,9 @@ powercfg /setactive SCHEME_BALANCED >nul 2>&1
 echo.
 echo   [OK] Seluruh pengaturan telah dikembalikan ke standar default Windows.
 echo.
+echo   [i] Catatan: Cache Windows Update ^& Log Event Viewer yang sudah
+echo       dibersihkan bersifat pembersihan dan tidak dapat dikembalikan.
+echo.
 pause
 goto MENU
 
@@ -263,8 +275,20 @@ echo  ==========================================================================
 echo   DIAGNOSTIK RINGKAS SISTEM
 echo  ==========================================================================
 echo.
+echo   [Identitas PC]
+echo     - Nama PC     : %COMPUTERNAME%
+echo     - Pengguna    : %USERNAME%
+
+echo.
+echo   [Tipe Disk Drive C:]
+set "DIAG_DISK="
+for /f "tokens=*" %%A in ('powershell -NoProfile -Command "Get-PhysicalDisk | Where-Object { $_.DeviceID -eq (Get-Partition -DriveLetter C).DiskNumber } | Select-Object -ExpandProperty MediaType" 2^>nul') do set "DIAG_DISK=%%A"
+if not defined DIAG_DISK set "DIAG_DISK=Tidak Terdeteksi"
+echo     - Tipe        : %DIAG_DISK%
+
+echo.
 echo   [Status Layanan Kunci]
-for %%S in (SysMain WSearch DiagTrack BITS) do (
+for %%S in (SysMain WSearch DiagTrack BITS dmwappushservice DoSvc) do (
     for /f "tokens=3 delims=: " %%A in ('sc query "%%S" 2^>nul ^| findstr /i "STATE"') do (
         echo     - %%S : %%A
     )
