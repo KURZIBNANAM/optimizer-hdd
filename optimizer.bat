@@ -1,13 +1,13 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
-title SYSTEM OPTIMIZER WINDOWS 10 HDD - BM JAYA 2 v1.4
+title SYSTEM OPTIMIZER WINDOWS 10 HDD - BM JAYA 2 v1.5
 mode con: cols=80 lines=33
 color 0b
 
 :: ======================================================================
 :: IDENTITAS & KONFIGURASI
 :: ======================================================================
-set "CURRENT_VER=1.4"
+set "CURRENT_VER=1.5"
 set "APP_NAME=System Optimizer Windows 10 HDD"
 set "VER_URL=https://raw.githubusercontent.com/KURZIBNANAM/optimizer-hdd/main/version.txt"
 set "UPDATE_URL=https://raw.githubusercontent.com/KURZIBNANAM/optimizer-hdd/main/optimizer.bat"
@@ -126,24 +126,35 @@ echo   MEMULAI OPTIMASI HDD (POS SAFE MODE)
 echo  ==========================================================================
 echo.
 
-:: 1. Service Background I/O Berat
-echo   [1/6] Mengatur Windows Service...
-call :ManageService WSearch disabled
-call :ManageService SysMain disabled
-call :ManageService DiagTrack disabled
-call :ManageService DoSvc demand
-call :ManageService dmwappushservice demand
-call :ManageService BITS demand
+:: 1. Deteksi Jenis Disk & Service Background I/O Berat
+echo   [1/8] Memeriksa Disk ^& Mengatur Windows Service...
+for /f "tokens=*" %%A in ('powershell -NoProfile -Command "Get-PhysicalDisk | Where-Object { $_.DeviceID -eq (Get-Partition -DriveLetter C).DiskNumber } | Select-Object -ExpandProperty MediaType" 2^>nul') do set "DISK_TYPE=%%A"
+if /i "%DISK_TYPE%"=="SSD" (
+    echo         - Drive C: adalah SSD. Mengamankan SysMain...
+    call :ManageService SysMain auto
+    call :ManageService WSearch disabled
+    call :ManageService DiagTrack disabled
+    call :ManageService DoSvc demand
+    call :ManageService dmwappushservice demand
+    call :ManageService BITS demand
+) else (
+    call :ManageService WSearch disabled
+    call :ManageService SysMain disabled
+    call :ManageService DiagTrack disabled
+    call :ManageService DoSvc demand
+    call :ManageService dmwappushservice demand
+    call :ManageService BITS demand
+)
 
 :: 2. Matikan Hibernasi (Menghemat 4-8 GB drive C:)
 echo.
-echo   [2/6] Mengelola Storage ^& Hibernasi...
+echo   [2/8] Mengelola Storage ^& Hibernasi...
 powercfg /h off >nul 2>&1
 echo         - File hiberfil.sys dinonaktifkan (Kapasitas C: bertambah).
 
 :: 3. Optimasi Responsivitas UI & Background Apps
 echo.
-echo   [3/6] Optimasi Responsivitas UI ^& Registry...
+echo   [3/8] Optimasi Responsivitas UI ^& Registry...
 reg add "HKCU\Control Panel\Desktop" /v MenuShowDelay /t REG_SZ /d 0 /f >nul 2>&1
 reg add "HKCU\Control Panel\Desktop\WindowMetrics" /v MinAnimate /t REG_SZ /d 0 /f >nul 2>&1
 reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" /v GlobalUserDisabled /t REG_DWORD /d 1 /f >nul 2>&1
@@ -151,21 +162,39 @@ echo         - Animasi jendela ^& delay menu diminimalkan.
 
 :: 4. Matikan NTFS Last Access Write (Mengurangi beban tulis mekanik HDD)
 echo.
-echo   [4/6] Mengurangi Beban Write Disk (NTFS)...
-fsutil behavior set disablelastaccess 1 >nul 2>&1
-echo         - Pencatatan waktu akses baca file dinonaktifkan.
+echo   [4/8] Mengurangi Beban Write Disk (NTFS)...
+if /i not "%DISK_TYPE%"=="SSD" (
+    fsutil behavior set disablelastaccess 1 >nul 2>&1
+    echo         - Pencatatan waktu akses baca file dinonaktifkan.
+) else (
+    echo         - SSD terdeteksi, melewati tweak NTFS...
+)
 
-:: 5. Pembersihan File Sementara Konservatif
+:: 5. Pembersihan Cache Windows Update
 echo.
-echo   [5/6] Pembersihan Cache ^& File Temp Aman...
+echo   [5/8] Membersihkan Cache Windows Update Lama...
+net stop wuauserv >nul 2>&1
+del /f /s /q "%SystemRoot%\SoftwareDistribution\Download\*.*" >nul 2>&1
+net start wuauserv >nul 2>&1
+echo         - Folder SoftwareDistribution dibersihkan.
+
+:: 6. Pembersihan File Sementara Konservatif
+echo.
+echo   [6/8] Pembersihan Cache ^& File Temp Aman...
 ipconfig /flushdns >nul 2>&1
 call :CleanSafeTemp "%TEMP%"
 call :CleanSafeTemp "%SystemRoot%\Temp"
 echo         - Cache DNS ^& file temporary kadaluarsa dibersihkan.
 
-:: 6. Mode High Performance (Mencegah throttling daya CPU)
+:: 7. Pembersihan Log Event Viewer
 echo.
-echo   [6/6] Mengaktifkan Mode High Performance...
+echo   [7/8] Membersihkan Log Event Viewer...
+for /f "tokens=*" %%1 in ('wevtutil.exe el 2^>nul') do wevtutil.exe cl "%%1" >nul 2>&1
+echo         - Log Windows Event Viewer dikosongkan.
+
+:: 8. Mode High Performance (Mencegah throttling daya CPU)
+echo.
+echo   [8/8] Mengaktifkan Mode High Performance...
 powercfg /setactive SCHEME_MIN >nul 2>&1
 if errorlevel 1 (
     powercfg -duplicatescheme 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c >nul 2>&1
