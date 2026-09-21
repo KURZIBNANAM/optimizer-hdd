@@ -1,13 +1,13 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
-title SYSTEM OPTIMIZER WINDOWS 10 HDD - BM JAYA 2 v1.5
-mode con: cols=80 lines=33
+title SYSTEM OPTIMIZER WINDOWS 10 HDD - BM JAYA 2 v1.6
+mode con: cols=80 lines=35
 color 0b
 
 :: ======================================================================
 :: IDENTITAS & KONFIGURASI
 :: ======================================================================
-set "CURRENT_VER=1.5"
+set "CURRENT_VER=1.6"
 set "APP_NAME=System Optimizer Windows 10 HDD"
 set "VER_URL=https://raw.githubusercontent.com/KURZIBNANAM/optimizer-hdd/main/version.txt"
 set "UPDATE_URL=https://raw.githubusercontent.com/KURZIBNANAM/optimizer-hdd/main/optimizer.bat"
@@ -27,6 +27,18 @@ if not "%errorlevel%"=="0" (
     echo.
     pause
     exit /b 1
+)
+
+:: ======================================================================
+:: DETEKSI VERSI WINDOWS 10 (KOMPATIBILITAS)
+:: ======================================================================
+set "WIN_BUILD=0"
+for /f "tokens=4 delims=. " %%A in ('ver 2^>nul') do (
+    for /f "tokens=3 delims=.]" %%B in ("%%A") do set "WIN_BUILD=%%B"
+)
+:: Fallback: ambil dari registry jika parsing 'ver' gagal
+if "%WIN_BUILD%"=="0" (
+    for /f "tokens=3" %%A in ('reg query "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion" /v CurrentBuildNumber 2^>nul ^| findstr /i "CurrentBuildNumber"') do set "WIN_BUILD=%%A"
 )
 
 :: ======================================================================
@@ -109,6 +121,7 @@ echo   SYSTEM OPTIMIZER WINDOWS 10 HDD - BM JAYA 2 [v%CURRENT_VER%]
 echo   Pengembang : Khairullah Irfansyah, S.Kom
 echo   Unit       : BM JAYA 2
 echo   Target     : Komputer Kasir / POS ^& PC Kantor Berbasis HDD
+echo   Windows 10 : Build %WIN_BUILD%
 echo  ==========================================================================
 echo.
 echo   [1] Jalankan Optimasi HDD (POS Safe Mode)
@@ -135,7 +148,7 @@ echo  ==========================================================================
 echo.
 
 :: 1. Deteksi Jenis Disk & Service Background I/O Berat
-echo   [1/8] Memeriksa Disk ^& Mengatur Windows Service...
+echo   [1/9] Memeriksa Disk ^& Mengatur Windows Service...
 set "DISK_TYPE="
 for /f "tokens=*" %%A in ('powershell -NoProfile -Command "Get-PhysicalDisk | Where-Object { $_.DeviceID -eq (Get-Partition -DriveLetter C).DiskNumber } | Select-Object -ExpandProperty MediaType" 2^>nul') do set "DISK_TYPE=%%A"
 if not defined DISK_TYPE set "DISK_TYPE=HDD"
@@ -159,21 +172,42 @@ if /i "%DISK_TYPE%"=="SSD" (
 
 :: 2. Matikan Hibernasi (Menghemat 4-8 GB drive C:)
 echo.
-echo   [2/8] Mengelola Storage ^& Hibernasi...
+echo   [2/9] Mengelola Storage ^& Hibernasi...
 powercfg /h off >nul 2>&1
 echo         - File hiberfil.sys dinonaktifkan (Kapasitas C: bertambah).
 
 :: 3. Optimasi Responsivitas UI & Background Apps
 echo.
-echo   [3/8] Optimasi Responsivitas UI ^& Registry...
+echo   [3/9] Optimasi Responsivitas UI ^& Registry...
 reg add "HKCU\Control Panel\Desktop" /v MenuShowDelay /t REG_SZ /d 0 /f >nul 2>&1
 reg add "HKCU\Control Panel\Desktop\WindowMetrics" /v MinAnimate /t REG_SZ /d 0 /f >nul 2>&1
 reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" /v GlobalUserDisabled /t REG_DWORD /d 1 /f >nul 2>&1
 echo         - Animasi jendela ^& delay menu diminimalkan.
 
-:: 4. Matikan NTFS Last Access Write (Mengurangi beban tulis mekanik HDD)
+:: 4. Matikan Efek Transparansi Windows 10 (Meringankan GPU & CPU)
 echo.
-echo   [4/8] Mengurangi Beban Write Disk (NTFS)...
+echo   [4/9] Menonaktifkan Efek Transparansi Windows 10...
+:: EnableTransparency tersedia di Windows 10 Build 15063+ (Creators Update 1703+)
+:: Pada build lama, key ini tidak ada dan akan dibuat tanpa efek samping
+reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v EnableTransparency /t REG_DWORD /d 0 /f >nul 2>&1
+if not errorlevel 1 (
+    echo         - Efek transparansi taskbar ^& Start Menu dimatikan.
+) else (
+    echo         - [i] Gagal mengatur transparansi (mungkin tidak didukung).
+)
+:: Matikan juga efek blur/acrylic DWM (berlaku di semua build Windows 10)
+reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DWM" /v DisallowAnimations /t REG_DWORD /d 1 /f >nul 2>&1
+reg add "HKCU\SOFTWARE\Microsoft\Windows\DWM" /v EnableAeroPeek /t REG_DWORD /d 0 /f >nul 2>&1
+reg add "HKCU\SOFTWARE\Microsoft\Windows\DWM" /v AlwaysHibernateThumbnails /t REG_DWORD /d 0 /f >nul 2>&1
+echo         - Efek visual DWM (Aero Peek, animasi komposisi) dimatikan.
+:: Nonaktifkan visual effects via SystemPropertiesPerformance registry
+:: Kompatibel dengan semua versi Windows 10 (Build 10240+)
+reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f >nul 2>&1
+echo         - Visual Effects disetel ke mode performa terbaik.
+
+:: 5. Matikan NTFS Last Access Write (Mengurangi beban tulis mekanik HDD)
+echo.
+echo   [5/9] Mengurangi Beban Write Disk (NTFS)...
 if /i not "%DISK_TYPE%"=="SSD" (
     fsutil behavior set disablelastaccess 1 >nul 2>&1
     echo         - Pencatatan waktu akses baca file dinonaktifkan.
@@ -181,29 +215,29 @@ if /i not "%DISK_TYPE%"=="SSD" (
     echo         - SSD terdeteksi, melewati tweak NTFS...
 )
 
-:: 5. Pembersihan Cache Windows Update (Aman Diulang)
+:: 6. Pembersihan Cache Windows Update (Aman Diulang)
 echo.
-echo   [5/8] Membersihkan Cache Windows Update Lama...
+echo   [6/9] Membersihkan Cache Windows Update Lama...
 forfiles /p "%SystemRoot%\SoftwareDistribution\Download" /s /m *.* /d -7 /c "cmd /c del /f /q @path" >nul 2>&1
 echo         - File cache update lama (^>7 hari) dibersihkan.
 
-:: 6. Pembersihan File Sementara Konservatif
+:: 7. Pembersihan File Sementara Konservatif
 echo.
-echo   [6/8] Pembersihan Cache ^& File Temp Aman...
+echo   [7/9] Pembersihan Cache ^& File Temp Aman...
 ipconfig /flushdns >nul 2>&1
 call :CleanSafeTemp "%TEMP%"
 call :CleanSafeTemp "%SystemRoot%\Temp"
 echo         - Cache DNS ^& file temporary kadaluarsa dibersihkan.
 
-:: 7. Pembersihan Log Event Viewer
+:: 8. Pembersihan Log Event Viewer
 echo.
-echo   [7/8] Membersihkan Log Event Viewer...
+echo   [8/9] Membersihkan Log Event Viewer...
 for /f "tokens=*" %%1 in ('wevtutil.exe el 2^>nul') do wevtutil.exe cl "%%1" >nul 2>&1
 echo         - Log Windows Event Viewer dikosongkan.
 
-:: 8. Mode High Performance (Mencegah throttling daya CPU)
+:: 9. Mode High Performance (Mencegah throttling daya CPU)
 echo.
-echo   [8/8] Mengaktifkan Mode High Performance...
+echo   [9/9] Mengaktifkan Mode High Performance...
 powercfg /setactive SCHEME_MIN >nul 2>&1
 if errorlevel 1 (
     powercfg -duplicatescheme 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c >nul 2>&1
@@ -213,9 +247,10 @@ echo         - Power Plan disetel ke performa penuh.
 
 echo.
 echo  ==========================================================================
-echo   [OK] OPTIMASI SELESAI
+echo   [OK] OPTIMASI SELESAI (v%CURRENT_VER%)
 echo  ==========================================================================
 echo   - Beban 100%% disk HDD berkurang signifikan.
+echo   - Efek transparansi ^& visual berat Windows dimatikan.
 echo   - Layanan Database POS, Printer, dan Jaringan tetap aman 100%%.
 echo   - Tidak ada file log/sampah yang tersimpan di sistem.
 echo.
@@ -233,7 +268,7 @@ echo   MENGEMBALIKAN PENGATURAN KE STANDAR DEFAULT WINDOWS
 echo  ==========================================================================
 echo.
 echo   Tindakan ini akan mengaktifkan kembali layanan SysMain, Search,
-echo   dan pengaturan visual standar Windows tanpa perlu file backup.
+echo   efek transparansi, dan pengaturan visual standar Windows.
 echo.
 choice /C YN /N /M "  Lanjutkan reset ke default? [Y/N]: "
 if errorlevel 2 goto MENU
@@ -249,6 +284,14 @@ call :ManageService BITS demand
 echo   [*] Mengembalikan Hibernasi ^& NTFS...
 powercfg /h on >nul 2>&1
 fsutil behavior set disablelastaccess 0 >nul 2>&1
+
+echo   [*] Mengembalikan Efek Transparansi ^& Visual...
+reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v EnableTransparency /t REG_DWORD /d 1 /f >nul 2>&1
+reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DWM" /v DisallowAnimations /t REG_DWORD /d 0 /f >nul 2>&1
+reg add "HKCU\SOFTWARE\Microsoft\Windows\DWM" /v EnableAeroPeek /t REG_DWORD /d 1 /f >nul 2>&1
+reg delete "HKCU\SOFTWARE\Microsoft\Windows\DWM" /v AlwaysHibernateThumbnails /f >nul 2>&1
+reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 0 /f >nul 2>&1
+echo         - Efek transparansi ^& visual Windows dikembalikan.
 
 echo   [*] Mengembalikan Visual ^& Power Plan...
 reg add "HKCU\Control Panel\Desktop" /v MenuShowDelay /t REG_SZ /d 400 /f >nul 2>&1
@@ -278,6 +321,7 @@ echo.
 echo   [Identitas PC]
 echo     - Nama PC     : %COMPUTERNAME%
 echo     - Pengguna    : %USERNAME%
+echo     - Win10 Build : %WIN_BUILD%
 
 echo.
 echo   [Tipe Disk Drive C:]
@@ -285,6 +329,18 @@ set "DIAG_DISK="
 for /f "tokens=*" %%A in ('powershell -NoProfile -Command "Get-PhysicalDisk | Where-Object { $_.DeviceID -eq (Get-Partition -DriveLetter C).DiskNumber } | Select-Object -ExpandProperty MediaType" 2^>nul') do set "DIAG_DISK=%%A"
 if not defined DIAG_DISK set "DIAG_DISK=Tidak Terdeteksi"
 echo     - Tipe        : %DIAG_DISK%
+
+echo.
+echo   [Status Efek Transparansi]
+set "TRANSP_STATUS=Tidak Diketahui"
+for /f "tokens=3" %%A in ('reg query "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v EnableTransparency 2^>nul ^| findstr /i "EnableTransparency"') do (
+    if "%%A"=="0x0" (
+        set "TRANSP_STATUS=MATI (Dioptimasi)"
+    ) else (
+        set "TRANSP_STATUS=AKTIF (Default)"
+    )
+)
+echo     - Transparansi : !TRANSP_STATUS!
 
 echo.
 echo   [Status Layanan Kunci]
