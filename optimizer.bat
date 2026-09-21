@@ -33,13 +33,8 @@ if not "%errorlevel%"=="0" (
 :: DETEKSI VERSI WINDOWS 10 (KOMPATIBILITAS)
 :: ======================================================================
 set "WIN_BUILD=0"
-for /f "tokens=4 delims=. " %%A in ('ver 2^>nul') do (
-    for /f "tokens=3 delims=.]" %%B in ("%%A") do set "WIN_BUILD=%%B"
-)
-:: Fallback: ambil dari registry jika parsing 'ver' gagal
-if "%WIN_BUILD%"=="0" (
-    for /f "tokens=3" %%A in ('reg query "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion" /v CurrentBuildNumber 2^>nul ^| findstr /i "CurrentBuildNumber"') do set "WIN_BUILD=%%A"
-)
+for /f "tokens=3" %%A in ('reg query "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion" /v CurrentBuildNumber 2^>nul ^| findstr /i "CurrentBuildNumber"') do set "WIN_BUILD=%%A"
+if "%WIN_BUILD%"=="0" set "WIN_BUILD=Unknown"
 
 :: ======================================================================
 :: AUTO UPDATE CERDAS (NON-BLOCKING JIKA OFFLINE)
@@ -156,19 +151,14 @@ echo         - Drive C: terdeteksi sebagai: %DISK_TYPE%
 if /i "%DISK_TYPE%"=="SSD" (
     echo         - Drive C: adalah SSD. Mengamankan SysMain...
     call :ManageService SysMain auto
-    call :ManageService WSearch disabled
-    call :ManageService DiagTrack disabled
-    call :ManageService DoSvc demand
-    call :ManageService dmwappushservice demand
-    call :ManageService BITS demand
 ) else (
-    call :ManageService WSearch disabled
     call :ManageService SysMain disabled
-    call :ManageService DiagTrack disabled
-    call :ManageService DoSvc demand
-    call :ManageService dmwappushservice demand
-    call :ManageService BITS demand
 )
+call :ManageService WSearch disabled
+call :ManageService DiagTrack disabled
+call :ManageService DoSvc demand
+call :ManageService dmwappushservice demand
+call :ManageService BITS demand
 
 :: 2. Matikan Hibernasi (Menghemat 4-8 GB drive C:)
 echo.
@@ -190,16 +180,12 @@ echo   [4/9] Menonaktifkan Efek Transparansi Windows 10...
 :: EnableTransparency tersedia di Windows 10 Build 15063+ (Creators Update 1703+)
 :: Pada build lama, key ini tidak ada dan akan dibuat tanpa efek samping
 reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v EnableTransparency /t REG_DWORD /d 0 /f >nul 2>&1
-if not errorlevel 1 (
-    echo         - Efek transparansi taskbar ^& Start Menu dimatikan.
-) else (
-    echo         - [i] Gagal mengatur transparansi (mungkin tidak didukung).
-)
+echo         - Efek transparansi taskbar dan Start Menu dimatikan.
 :: Matikan juga efek blur/acrylic DWM (berlaku di semua build Windows 10)
 reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DWM" /v DisallowAnimations /t REG_DWORD /d 1 /f >nul 2>&1
 reg add "HKCU\SOFTWARE\Microsoft\Windows\DWM" /v EnableAeroPeek /t REG_DWORD /d 0 /f >nul 2>&1
 reg add "HKCU\SOFTWARE\Microsoft\Windows\DWM" /v AlwaysHibernateThumbnails /t REG_DWORD /d 0 /f >nul 2>&1
-echo         - Efek visual DWM (Aero Peek, animasi komposisi) dimatikan.
+echo         - Efek visual DWM -- Aero Peek, animasi komposisi -- dimatikan.
 :: Nonaktifkan visual effects via SystemPropertiesPerformance registry
 :: Kompatibel dengan semua versi Windows 10 (Build 10240+)
 reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f >nul 2>&1
@@ -232,7 +218,7 @@ echo         - Cache DNS ^& file temporary kadaluarsa dibersihkan.
 :: 8. Pembersihan Log Event Viewer
 echo.
 echo   [8/9] Membersihkan Log Event Viewer...
-for /f "tokens=*" %%1 in ('wevtutil.exe el 2^>nul') do wevtutil.exe cl "%%1" >nul 2>&1
+for /f "tokens=*" %%L in ('wevtutil.exe el 2^>nul') do wevtutil.exe cl "%%L" >nul 2>&1
 echo         - Log Windows Event Viewer dikosongkan.
 
 :: 9. Mode High Performance (Mencegah throttling daya CPU)
@@ -333,13 +319,9 @@ echo     - Tipe        : %DIAG_DISK%
 echo.
 echo   [Status Efek Transparansi]
 set "TRANSP_STATUS=Tidak Diketahui"
-for /f "tokens=3" %%A in ('reg query "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v EnableTransparency 2^>nul ^| findstr /i "EnableTransparency"') do (
-    if "%%A"=="0x0" (
-        set "TRANSP_STATUS=MATI (Dioptimasi)"
-    ) else (
-        set "TRANSP_STATUS=AKTIF (Default)"
-    )
-)
+for /f "tokens=3" %%A in ('reg query "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v EnableTransparency 2^>nul ^| findstr /i "EnableTransparency"') do set "TRANSP_STATUS=%%A"
+if "!TRANSP_STATUS!"=="0x0" set "TRANSP_STATUS=MATI [Dioptimasi]"
+if "!TRANSP_STATUS!"=="0x1" set "TRANSP_STATUS=AKTIF [Default]"
 echo     - Transparansi : !TRANSP_STATUS!
 
 echo.
@@ -379,11 +361,11 @@ if /i "%ACTION%"=="disabled" (
     echo         - %SVC% : Disabled
 ) else if /i "%ACTION%"=="demand" (
     sc config "%SVC%" start= demand >nul 2>&1
-    echo         - %SVC% : Manual (Demand)
+    echo         - %SVC% : Manual
 ) else if /i "%ACTION%"=="auto" (
     sc config "%SVC%" start= auto >nul 2>&1
     net start "%SVC%" >nul 2>&1
-    echo         - %SVC% : Aktif (Default)
+    echo         - %SVC% : Aktif
 )
 exit /b 0
 
