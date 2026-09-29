@@ -13,7 +13,7 @@ set "GUID_HIGH=8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"
 set "GUID_BALANCED=381b4222-f694-41f0-9685-ff5bb260df2e"
 
 :: ======================================================================
-:: CEK ADMINISTRATOR + AUTO UAC FIX (Kompatibel Semua Versi Windows)
+:: CEK ADMINISTRATOR + AUTO UAC
 :: ======================================================================
 fltmc >nul 2>&1
 if errorlevel 1 (
@@ -24,7 +24,7 @@ if errorlevel 1 (
         echo  ==========================================================================
         echo   [!] HAK ADMINISTRATOR DIBUTUHKAN
         echo  ==========================================================================
-        echo   Script ini memerlukan hak administrator untuk mengelola service dan disk.
+        echo   Script ini memerlukan hak administrator.
         echo   Klik kanan file ini, lalu pilih: "Run as administrator"
         echo.
         pause
@@ -48,7 +48,7 @@ for /f "tokens=3" %%A in ('reg query "HKLM\SOFTWARE\Microsoft\Windows NT\Current
 if "%WIN_BUILD%"=="0" set "WIN_BUILD=Unknown"
 
 :: ======================================================================
-:: DETEKSI KETERSEDIAAN CURL / POWERSHELL DOWNLOAD
+:: DETEKSI KETERSEDIAAN CURL / POWERSHELL
 :: ======================================================================
 set "HAS_CURL=0"
 set "HAS_PS=0"
@@ -56,7 +56,7 @@ where curl.exe >nul 2>&1 && set "HAS_CURL=1"
 where powershell.exe >nul 2>&1 && set "HAS_PS=1"
 
 :: ======================================================================
-:: AUTO UPDATE (NON-BLOCKING JIKA OFFLINE/WINDOWS LAMA)
+:: AUTO UPDATE (NON-BLOCKING JIKA OFFLINE)
 :: ======================================================================
 :CHECK_UPDATE
 if "!HAS_PS!"=="0" goto MENU
@@ -69,7 +69,6 @@ echo.
 echo   [] Memeriksa pembaruan repository...
 set "REMOTE_VER="
 
-:: -- Coba curl dulu (Win10 1709+), fallback ke PowerShell (semua Win10) --
 if "!HAS_CURL!"=="1" (
     for /f "usebackq tokens=1 delims= " %%A in (`curl.exe -L -s --fail --connect-timeout 2 -m 4 "%VER_URL%" 2^>nul`) do (
         if not defined REMOTE_VER set "REMOTE_VER=%%A"
@@ -89,13 +88,12 @@ set "REMOTE_VER=!REMOTE_VER:v=!"
 set "REMOTE_VER=!REMOTE_VER:V=!"
 set "REMOTE_VER=!REMOTE_VER: =!"
 set "IS_NEW="
-for /f "delims=" %%A in ('powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$a=[version]'%CURRENT_VER%';$r='%REMOTE_VER%'.Trim^(^).Trim^([char]0xFEFF^); try { $b=[version]$r; if($b -gt$a){'YES'} } catch {}" 2^>nul') do set "IS_NEW=%%A"
+for /f "delims=" %%A in ('powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "try { $c='%CURRENT_VER%'.Split('.') + @('0','0','0','0') ^| Select-Object -First 4; $r='%REMOTE_VER%'.Split('.') + @('0','0','0','0') ^| Select-Object -First 4; $c=[int]$c[0]*1000000+[int]$c[1]*10000+[int]$c[2]*100+[int]$c[3]; $r=[int]$r[0]*1000000+[int]$r[1]*10000+[int]$r[2]*100+[int]$r[3]; if($r -gt $c){'YES'} } catch {}" 2^>nul') do set "IS_NEW=%%A"
 if /i not "!IS_NEW!"=="YES" goto MENU
 echo   [] Versi baru terdeteksi: v!REMOTE_VER!
 echo   [*] Mengunduh script pembaruan...
 set "UPDATER_TMP=%TEMP%\update_%RANDOM%.bat"
 
-:: -- Download: curl atau PowerShell fallback --
 if "!HAS_CURL!"=="1" (
     curl.exe -L -s --fail --connect-timeout 4 -m 20 -o "!UPDATER_TMP!" "%UPDATE_URL%" >nul 2>&1
 ) else (
@@ -106,7 +104,7 @@ if not exist "!UPDATER_TMP!" goto SKIP_UPDATE
 findstr /i /c:":MENU" "!UPDATER_TMP!" >nul 2>&1 || goto SKIP_UPDATE
 findstr /i /c:"Khairullah Irfansyah" "!UPDATER_TMP!" >nul 2>&1 || goto SKIP_UPDATE
 findstr /i /c:"CURRENT_VER" "!UPDATER_TMP!" >nul 2>&1 || goto SKIP_UPDATE
-echo   [OK] Validasi 3-titik berhasil. Memasang versi baru...
+echo   [OK] Validasi berhasil. Memasang versi baru...
 set "SELF_RUNNER=%TEMP%\replacer_%RANDOM%.bat"
 (
 echo @echo off
@@ -114,7 +112,7 @@ echo timeout /t 1 /nobreak ^>nul
 echo copy /y "!UPDATER_TMP!" "%~f0" ^>nul
 echo del /f /q "!UPDATER_TMP!" ^>nul
 echo start "" "%~f0"
-echo del /f /q "%%~f0" ^>nul
+echo del /f /q "!SELF_RUNNER!" ^>nul
 ) > "!SELF_RUNNER!"
 start "" /min "!SELF_RUNNER!"
 exit /b 0
@@ -147,12 +145,14 @@ echo   [3] Cek Status Sistem Singkat (Diagnostik)
 echo   [4] Keluar
 echo.
 echo  ==========================================================================
+where choice >nul 2>&1
+if errorlevel 1 goto MENU_FALLBACK
 choice /C 1234 /N /M "  Pilih menu [1-4]: "
-if errorlevel 255 goto MENU_FALLBACK
 if errorlevel 4 goto QUIT
 if errorlevel 3 goto DIAGNOSTICS
 if errorlevel 2 goto RESTORE_DEFAULTS
 if errorlevel 1 goto OPTIMIZE
+goto MENU
 
 :MENU_FALLBACK
 set /p "MENU_CHOICE=  Pilih menu [1-4]: "
@@ -163,7 +163,7 @@ if "!MENU_CHOICE!"=="1" goto OPTIMIZE
 goto MENU
 
 :: ======================================================================
-:: 1. PROSES OPTIMASI (SILENT NO LOG)
+:: 1. PROSES OPTIMASI
 :: ======================================================================
 :OPTIMIZE
 cls
@@ -178,10 +178,8 @@ echo         - Drive %SystemDrive% terdeteksi sebagai: !DISK_TYPE!
 if /i "!DISK_TYPE!"=="SSD" (
     echo         - Drive sistem adalah SSD. SysMain tetap Auto.
     call :ManageService SysMain auto
-    call :ManageService Superfetch auto
 ) else (
     call :ManageService SysMain disabled
-    call :ManageService Superfetch disabled
 )
 call :ManageService WSearch disabled
 call :ManageService DiagTrack disabled
@@ -229,7 +227,10 @@ if defined WU_RUNNING (
 if exist "%SystemRoot%\SoftwareDistribution\Download" (
     del /f /q /s "%SystemRoot%\SoftwareDistribution\Download\*" >nul 2>&1
 )
-if defined WU_RUNNING sc start wuauserv >nul 2>&1
+if defined WU_RUNNING (
+    sc start wuauserv >nul 2>&1
+    sc start bits >nul 2>&1
+)
 echo         - Cache update di folder Download dibersihkan.
 echo.
 echo   [7/9] Pembersihan Cache ^& File Temp Aman...
@@ -246,9 +247,13 @@ echo         - Log Application, System, dan Setup dikosongkan.
 echo.
 echo   [9/9] Mengaktifkan Mode High Performance...
 powercfg /setactive %GUID_HIGH% >nul 2>&1
-if errorlevel 1 powercfg /setactive SCHEME_MIN >nul 2>&1
 if errorlevel 1 (
-    echo         - Skema High Performance tidak tersedia di mesin ini.
+    powercfg /setactive SCHEME_MIN >nul 2>&1
+    if errorlevel 1 (
+        echo         - Skema High Performance tidak tersedia di mesin ini.
+    ) else (
+        echo         - Power Plan disetel ke High Performance (fallback).
+    )
 ) else (
     echo         - Power Plan disetel ke High Performance.
 )
@@ -292,7 +297,6 @@ echo.
 echo   [] Mengembalikan Service...
 call :ManageService WSearch auto
 call :ManageService SysMain auto
-call :ManageService Superfetch auto
 call :ManageService DiagTrack auto
 call :ManageService DoSvc demand
 call :ManageService BITS demand
@@ -384,25 +388,24 @@ goto MENU
 
 :DetectDisk
 set "DISK_TYPE=HDD"
-set "SAW_HDD="
-set "SAW_SSD="
-:: Metode 1: PowerShell Get-PhysicalDisk (Win10 semua versi)
-for /f "delims=" %%A in ('powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Get-PhysicalDisk ^| Select-Object -ExpandProperty MediaType" 2^>nul') do (
-    set "MT=%%A"
-    set "MT=!MT: =!"
-    if /i "!MT!"=="HDD" set "SAW_HDD=1"
-    if /i "!MT!"=="SSD" set "SAW_SSD=1"
-    if /i "!MT!"=="SCM" set "SAW_SSD=1"
+set "SYS_MEDIA="
+:: Metode 1: Deteksi tipe disk sistem via PowerShell
+for /f "delims=" %%A in ('powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "try { $d=(Get-Partition -DriveLetter $env:SystemDrive[0] -ErrorAction Stop).DiskNumber; (Get-Disk -Number $d -ErrorAction Stop).MediaType } catch {}" 2^>nul') do set "SYS_MEDIA=%%A"
+if defined SYS_MEDIA (
+    echo !SYS_MEDIA! | findstr /i "SSD" >nul && set "DISK_TYPE=SSD"
+    echo !SYS_MEDIA! | findstr /i "HDD" >nul && set "DISK_TYPE=HDD"
+    exit /b 0
 )
-:: Metode 2: Fallback via WMI jika Get-PhysicalDisk gagal/Unspecified
-if not defined SAW_HDD if not defined SAW_SSD (
-    for /f "tokens=*" %%A in ('wmic diskdrive get MediaType 2^>nul ^| findstr /i /v "MediaType"') do (
-        set "WMT=%%A"
-        set "WMT=!WMT: =!"
-        if /i "!WMT!"=="FixedHardDiskMedia" set "SAW_HDD=1"
-        if /i "!WMT!"=="ExternalHardDiskMedia" set "SAW_HDD=1"
-        if /i "!WMT!"=="RemovableMedia" set "SAW_HDD=1"
-    )
+:: Metode 2: Fallback via WMI
+set "SAW_SSD="
+set "SAW_HDD="
+for /f "tokens=*" %%A in ('wmic diskdrive get MediaType 2^>nul ^| findstr /i /v "MediaType"') do (
+    set "WMT=%%A"
+    set "WMT=!WMT: =!"
+    if /i "!WMT!"=="SSD" set "SAW_SSD=1"
+    if /i "!WMT!"=="FixedHardDiskMedia" set "SAW_HDD=1"
+    if /i "!WMT!"=="ExternalHardDiskMedia" set "SAW_HDD=1"
+    if /i "!WMT!"=="RemovableMedia" set "SAW_HDD=1"
 )
 if defined SAW_SSD (
     set "DISK_TYPE=SSD"
