@@ -1,11 +1,11 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
-title SYSTEM OPTIMIZER WINDOWS 10 HDD - BM JAYA 2 v1.8
+title SYSTEM OPTIMIZER WINDOWS 10 HDD - BM JAYA 2 v1.9
 
 :: ======================================================================
 :: IDENTITAS & KONFIGURASI
 :: ======================================================================
-set "CURRENT_VER=1.8"
+set "CURRENT_VER=1.9"
 set "APP_NAME=System Optimizer Windows 10 HDD"
 set "VER_URL=https://raw.githubusercontent.com/KURZIBNANAM/optimizer-hdd/main/version.txt"
 set "UPDATE_URL=https://raw.githubusercontent.com/KURZIBNANAM/optimizer-hdd/main/optimizer.bat"
@@ -63,7 +63,7 @@ if "!HAS_PS!"=="0" goto MENU
 cls
 echo.
 echo  ==========================================================================
-echo   SYSTEM OPTIMIZER WINDOWS 10 HDD - BM JAYA 2 v%CURRENT_VER%
+echo   %APP_NAME% - BM JAYA 2 v%CURRENT_VER%
 echo  ==========================================================================
 echo.
 echo   [] Memeriksa pembaruan repository...
@@ -84,11 +84,14 @@ if not defined REMOTE_VER (
     timeout /t 1 /nobreak >nul
     goto MENU
 )
+
 set "REMOTE_VER=!REMOTE_VER:v=!"
 set "REMOTE_VER=!REMOTE_VER:V=!"
 set "REMOTE_VER=!REMOTE_VER: =!"
 set "IS_NEW="
+
 for /f "delims=" %%A in ('powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "try { $c='%CURRENT_VER%'.Split('.') + @('0','0','0','0') ^| Select-Object -First 4; $r='%REMOTE_VER%'.Split('.') + @('0','0','0','0') ^| Select-Object -First 4; $c=[int]$c[0]*1000000+[int]$c[1]*10000+[int]$c[2]*100+[int]$c[3]; $r=[int]$r[0]*1000000+[int]$r[1]*10000+[int]$r[2]*100+[int]$r[3]; if($r -gt $c){'YES'} } catch {}" 2^>nul') do set "IS_NEW=%%A"
+
 if /i not "!IS_NEW!"=="YES" goto MENU
 echo   [] Versi baru terdeteksi: v!REMOTE_VER!
 echo   [*] Mengunduh script pembaruan...
@@ -132,7 +135,7 @@ timeout /t 2 /nobreak >nul
 cls
 echo.
 echo  ==========================================================================
-echo   SYSTEM OPTIMIZER WINDOWS 10 HDD - BM JAYA 2 [v%CURRENT_VER%]
+echo   %APP_NAME% - BM JAYA 2 [v%CURRENT_VER%]
 echo   Pengembang : Khairullah Irfansyah, S.Kom
 echo   Unit       : BM JAYA 2
 echo   Target     : Komputer Kasir / POS ^& PC Kantor Berbasis HDD
@@ -144,7 +147,6 @@ echo   [2] Kembalikan ke Standar Default Windows
 echo   [3] Cek Status Sistem Singkat (Diagnostik)
 echo   [4] Keluar
 echo.
-echo  ==========================================================================
 where choice >nul 2>&1
 if errorlevel 1 goto MENU_FALLBACK
 choice /C 1234 /N /M "  Pilih menu [1-4]: "
@@ -176,7 +178,7 @@ echo   [1/9] Memeriksa Disk ^& Mengatur Windows Service...
 call :DetectDisk
 echo         - Drive %SystemDrive% terdeteksi sebagai: !DISK_TYPE!
 if /i "!DISK_TYPE!"=="SSD" (
-    echo         - Drive sistem adalah SSD. SysMain tetap Auto.
+    echo         - Drive sistem adalah SSD. Menjaga SysMain Auto.
     call :ManageService SysMain auto
 ) else (
     call :ManageService SysMain disabled
@@ -189,27 +191,26 @@ call :ManageService BITS demand
 echo.
 echo   [2/9] Mengelola Storage ^& Hibernasi...
 powercfg /h off >nul 2>&1
-echo         - File hiberfil.sys dinonaktifkan (kapasitas C: bertambah).
+echo         - Hibernasi dinonaktifkan (hiberfil.sys off).
 echo.
 echo   [3/9] Optimasi Responsivitas UI ^& Registry...
 reg add "HKCU\Control Panel\Desktop" /v MenuShowDelay /t REG_SZ /d 0 /f >nul 2>&1
 reg add "HKCU\Control Panel\Desktop" /v DragFullWindows /t REG_SZ /d 0 /f >nul 2>&1
-reg add "HKCU\Control Panel\Desktop" /v UserPreferencesMask /t REG_BINARY /d 9012038010000000 /f >nul 2>&1
 reg add "HKCU\Control Panel\Desktop\WindowMetrics" /v MinAnimate /t REG_SZ /d 0 /f >nul 2>&1
-reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" /v GlobalUserDisabled /t REG_DWORD /d 1 /f >nul 2>&1
+reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" /v GlobalUserDisabled /t REG_DWORD /d 1 /f >nul 2>&1 || echo         - Key BackgroundAccessApplications tidak tersedia, dilewati.
 echo         - Delay menu, animasi, dan background apps diminimalkan.
 echo.
 echo   [4/9] Menonaktifkan Efek Transparansi Windows 10...
-reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v EnableTransparency /t REG_DWORD /d 0 /f >nul 2>&1
-reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DWM" /v DisallowAnimations /t REG_DWORD /d 1 /f >nul 2>&1
-reg add "HKCU\SOFTWARE\Microsoft\Windows\DWM" /v EnableAeroPeek /t REG_DWORD /d 0 /f >nul 2>&1
-reg add "HKCU\SOFTWARE\Microsoft\Windows\DWM" /v AlwaysHibernateThumbnails /t REG_DWORD /d 0 /f >nul 2>&1
-reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f >nul 2>&1
-echo         - Transparansi, Aero Peek, dan Visual Effects mode performa.
+reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v EnableTransparency /t REG_DWORD /d 0 /f >nul 2>&1 || echo         - Key Personalize tidak tersedia, dilewati.
+reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DWM" /v DisallowAnimations /t REG_DWORD /d 1 /f >nul 2>&1 || echo         - Policy DWM tidak dapat dibuat, dilewati.
+reg add "HKCU\SOFTWARE\Microsoft\Windows\DWM" /v EnableAeroPeek /t REG_DWORD /d 0 /f >nul 2>&1 || echo         - Key DWM tidak tersedia, dilewati.
+reg add "HKCU\SOFTWARE\Microsoft\Windows\DWM" /v AlwaysHibernateThumbnails /t REG_DWORD /d 0 /f >nul 2>&1 || echo         - Key DWM tidak tersedia, dilewati.
+reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f >nul 2>&1 || echo         - Key VisualEffects tidak tersedia, dilewati.
+echo         - Transparansi dan visual effects disetel ke mode performa.
 echo.
 echo   [5/9] Mengurangi Beban Write Disk (NTFS)...
 if /i not "!DISK_TYPE!"=="SSD" (
-    %SystemRoot%\System32\fsutil.exe behavior set disablelastaccess 1 >nul 2>&1
+    %SystemRoot%\System32\fsutil.exe behavior set disablelastaccess 1 >nul 2>&1 || echo         - fsutil tidak tersedia atau gagal, dilewati.
     echo         - Pencatatan waktu akses baca file dinonaktifkan.
 ) else (
     echo         - SSD terdeteksi, melewati tweak NTFS...
@@ -226,12 +227,14 @@ if defined WU_RUNNING (
 )
 if exist "%SystemRoot%\SoftwareDistribution\Download" (
     del /f /q /s "%SystemRoot%\SoftwareDistribution\Download\*" >nul 2>&1
+) else (
+    echo         - Folder SoftwareDistribution tidak ditemukan, dilewati.
 )
 if defined WU_RUNNING (
     sc start wuauserv >nul 2>&1
     sc start bits >nul 2>&1
 )
-echo         - Cache update di folder Download dibersihkan.
+echo         - Cache update dibersihkan jika ada.
 echo.
 echo   [7/9] Pembersihan Cache ^& File Temp Aman...
 ipconfig /flushdns >nul 2>&1
@@ -240,10 +243,10 @@ call :CleanSafeTemp "%SystemRoot%\Temp"
 echo         - Cache DNS dan file temporary kadaluarsa dibersihkan.
 echo.
 echo   [8/9] Membersihkan Log Event Viewer...
-%SystemRoot%\System32\wevtutil.exe cl Application >nul 2>&1
-%SystemRoot%\System32\wevtutil.exe cl System >nul 2>&1
-%SystemRoot%\System32\wevtutil.exe cl Setup >nul 2>&1
-echo         - Log Application, System, dan Setup dikosongkan.
+%SystemRoot%\System32\wevtutil.exe cl Application >nul 2>&1 || echo         - wevtutil tidak tersedia, dilewati.
+%SystemRoot%\System32\wevtutil.exe cl System >nul 2>&1 || echo         - wevtutil tidak tersedia, dilewati.
+%SystemRoot%\System32\wevtutil.exe cl Setup >nul 2>&1 || echo         - wevtutil tidak tersedia, dilewati.
+echo         - Log Application, System, dan Setup dikosongkan jika memungkinkan.
 echo.
 echo   [9/9] Mengaktifkan Mode High Performance...
 powercfg /setactive %GUID_HIGH% >nul 2>&1
@@ -264,7 +267,6 @@ echo  ==========================================================================
 echo   - Beban disk HDD berkurang (SysMain/Search/telemetry dimatikan).
 echo   - Efek transparansi dan visual berat Windows dimatikan.
 echo   - Layanan database POS, printer, dan jaringan tidak diubah.
-echo   - Beberapa efek UI aktif setelah Explorer di-restart.
 echo.
 choice /C YN /N /M "  Restart Explorer sekarang agar efek visual langsung aktif? [Y/N]: "
 if errorlevel 2 goto MENU
@@ -301,28 +303,25 @@ call :ManageService DiagTrack auto
 call :ManageService DoSvc demand
 call :ManageService BITS demand
 echo   [] Mengembalikan Hibernasi ^& NTFS...
-powercfg /h on >nul 2>&1
-%SystemRoot%\System32\fsutil.exe behavior set disablelastaccess 2 >nul 2>&1
+powercfg /h on >nul 2>&1 || echo         - powercfg tidak mendukung hibernasi di mesin ini.
+%SystemRoot%\System32\fsutil.exe behavior set disablelastaccess 2 >nul 2>&1 || echo         - fsutil tidak tersedia atau gagal.
 echo   [] Mengembalikan Efek Transparansi ^& Visual...
-reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v EnableTransparency /t REG_DWORD /d 1 /f >nul 2>&1
-reg delete "HKLM\SOFTWARE\Policies\Microsoft\Windows\DWM" /v DisallowAnimations /f >nul 2>&1
-reg add "HKCU\SOFTWARE\Microsoft\Windows\DWM" /v EnableAeroPeek /t REG_DWORD /d 1 /f >nul 2>&1
-reg delete "HKCU\SOFTWARE\Microsoft\Windows\DWM" /v AlwaysHibernateThumbnails /f >nul 2>&1
-reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 0 /f >nul 2>&1
-reg add "HKCU\Control Panel\Desktop" /v UserPreferencesMask /t REG_BINARY /d 9E3E078012000000 /f >nul 2>&1
-reg add "HKCU\Control Panel\Desktop" /v DragFullWindows /t REG_SZ /d 1 /f >nul 2>&1
-echo         - Efek transparansi dan visual Windows dikembalikan.
+reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v EnableTransparency /t REG_DWORD /d 1 /f >nul 2>&1 || echo         - Key Personalize tidak tersedia, dilewati.
+reg delete "HKLM\SOFTWARE\Policies\Microsoft\Windows\DWM" /v DisallowAnimations /f >nul 2>&1 2>nul || echo         - Policy DWM tidak ada atau tidak dapat dihapus.
+reg add "HKCU\SOFTWARE\Microsoft\Windows\DWM" /v EnableAeroPeek /t REG_DWORD /d 1 /f >nul 2>&1 || echo         - Key DWM tidak tersedia, dilewati.
+reg delete "HKCU\SOFTWARE\Microsoft\Windows\DWM" /v AlwaysHibernateThumbnails /f >nul 2>&1 2>nul || echo         - Key AlwaysHibernateThumbnails tidak ada.
+reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 0 /f >nul 2>&1 || echo         - Key VisualEffects tidak tersedia, dilewati.
+reg add "HKCU\Control Panel\Desktop" /v UserPreferencesMask /t REG_BINARY /d 9E3E078012000000 /f >nul 2>&1 || echo         - UserPreferencesMask tidak tersedia, dilewati.
+reg add "HKCU\Control Panel\Desktop" /v DragFullWindows /t REG_SZ /d 1 /f >nul 2>&1 || echo         - DragFullWindows tidak tersedia, dilewati.
+echo         - Efek transparansi dan visual Windows dikembalikan jika memungkinkan.
 echo   [] Mengembalikan Visual ^& Power Plan...
-reg add "HKCU\Control Panel\Desktop" /v MenuShowDelay /t REG_SZ /d 400 /f >nul 2>&1
-reg add "HKCU\Control Panel\Desktop\WindowMetrics" /v MinAnimate /t REG_SZ /d 1 /f >nul 2>&1
-reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" /v GlobalUserDisabled /t REG_DWORD /d 0 /f >nul 2>&1
+reg add "HKCU\Control Panel\Desktop" /v MenuShowDelay /t REG_SZ /d 400 /f >nul 2>&1 || echo         - MenuShowDelay tidak tersedia, dilewati.
+reg add "HKCU\Control Panel\Desktop\WindowMetrics" /v MinAnimate /t REG_SZ /d 1 /f >nul 2>&1 || echo         - MinAnimate tidak tersedia, dilewati.
+reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" /v GlobalUserDisabled /t REG_DWORD /d 0 /f >nul 2>&1 || echo         - BackgroundAccessApplications tidak tersedia, dilewati.
 powercfg /setactive %GUID_BALANCED% >nul 2>&1
 if errorlevel 1 powercfg /setactive SCHEME_BALANCED >nul 2>&1
 echo.
 echo   [OK] Seluruh pengaturan telah dikembalikan ke standar default Windows.
-echo.
-echo   [i] Cache Windows Update dan Log Event Viewer yang sudah
-echo       dibersihkan bersifat pembersihan dan tidak dapat dikembalikan.
 echo.
 choice /C YN /N /M "  Restart Explorer sekarang? [Y/N]: "
 if errorlevel 2 goto MENU
@@ -385,12 +384,11 @@ goto MENU
 :: ======================================================================
 :: SUB-ROUTINES
 :: ======================================================================
-
 :DetectDisk
 set "DISK_TYPE=HDD"
 set "SYS_MEDIA="
 :: Metode 1: Deteksi tipe disk sistem via PowerShell
-for /f "delims=" %%A in ('powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "try { $d=(Get-Partition -DriveLetter $env:SystemDrive[0] -ErrorAction Stop).DiskNumber; (Get-Disk -Number $d -ErrorAction Stop).MediaType } catch {}" 2^>nul') do set "SYS_MEDIA=%%A"
+for /f "delims=" %%A in ('powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "try { $drive = $env:SystemDrive.TrimEnd(':'); $p = Get-Partition -DriveLetter $drive -ErrorAction Stop; $d = Get-Disk -Number $p.DiskNumber -ErrorAction Stop; $d.MediaType } catch {}" 2^>nul') do set "SYS_MEDIA=%%A"
 if defined SYS_MEDIA (
     echo !SYS_MEDIA! | findstr /i "SSD" >nul && set "DISK_TYPE=SSD"
     echo !SYS_MEDIA! | findstr /i "HDD" >nul && set "DISK_TYPE=HDD"
@@ -418,7 +416,10 @@ exit /b 0
 set "SVC=%~1"
 set "ACTION=%~2"
 %SystemRoot%\System32\sc.exe query "%SVC%" >nul 2>&1
-if errorlevel 1 exit /b 0
+if errorlevel 1 (
+    echo         - %SVC% : Tidak tersedia di versi Windows ini
+    exit /b 0
+)
 if /i "%ACTION%"=="disabled" (
     %SystemRoot%\System32\sc.exe stop "%SVC%" >nul 2>&1
     %SystemRoot%\System32\sc.exe config "%SVC%" start= disabled >nul 2>&1
@@ -440,6 +441,7 @@ del /f /q "%TARGET_DIR%\*.tmp" >nul 2>&1
 del /f /q "%TARGET_DIR%\*.bak" >nul 2>&1
 del /f /q "%TARGET_DIR%\*.old" >nul 2>&1
 del /f /q "%TARGET_DIR%\*.dmp" >nul 2>&1
+del /f /q "%TARGET_DIR%\*.log" >nul 2>&1
 exit /b 0
 
 :ShowSvc
