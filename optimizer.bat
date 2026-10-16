@@ -68,7 +68,7 @@ where powershell.exe >nul 2>&1 && set "HAS_PS=1"
 call :DetectDisk
 
 :: ======================================================================
-:: AUTO UPDATE (NON-BLOCKING JIKA OFFLINE)
+:: AUTO UPDATE (ANTI-HANG, ANTI-CACHE, KOMPATIBEL WIN 10 2015-2022)
 :: ======================================================================
 :CHECK_UPDATE
 if "!HAS_PS!"=="0" if "!HAS_CURL!"=="0" goto MENU
@@ -80,24 +80,35 @@ echo ==========================================================================
 echo.
 echo [*] Memeriksa pembaruan script...
 set "REMOTE_VER="
+set "NOCACHE=?t=!RANDOM!"
 
 if "!HAS_CURL!"=="1" (
-    for /f "usebackq tokens=1 delims= " %%A in (`curl.exe -L -s --fail --connect-timeout 2 -m 4 "!VER_URL!" 2^>nul`) do (
+    for /f "usebackq tokens=1 delims= " %%A in (`curl.exe -L -s -k --fail --connect-timeout 3 -m 5 "!VER_URL!!NOCACHE!" 2^>nul`) do (
         if not defined REMOTE_VER set "REMOTE_VER=%%A"
     )
-) else (
-    for /f "delims=" %%A in ('powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "try { [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $w=New-Object Net.WebClient; $w.DownloadString('%VER_URL%').Trim() } catch {}" 2^>nul') do (
+)
+if not defined REMOTE_VER if "!HAS_PS!"=="1" (
+    for /f "delims=" %%A in ('powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { [Net.ServicePointManager]::SecurityProtocol = 3072; $r = [Net.WebRequest]::Create('!VER_URL!!NOCACHE!');$r.Timeout = 4000; $r.CachePolicy = New-Object Net.Cache.RequestCachePolicy([Net.Cache.RequestCacheLevel]::NoCacheNoStore);$resp = $r.GetResponse();$sr = New-Object IO.StreamReader($resp.GetResponseStream());$sr.ReadToEnd().Trim(); $sr.Close();$resp.Close() } catch {}" 2^>nul') do (
         if not defined REMOTE_VER set "REMOTE_VER=%%A"
     )
 )
 
 if not defined REMOTE_VER goto MENU
 
-:: Bersihkan karakter tersembunyi/CR dari versi remote
-for /f "tokens=1 delims= " %%Z in ("!REMOTE_VER!") do set "REMOTE_VER=%%Z"
-set "REMOTE_VER=!REMOTE_VER:v=!"
-set "REMOTE_VER=!REMOTE_VER:V=!"
-set "REMOTE_VER=!REMOTE_VER: =!"
+:: Bersihkan karakter BOM, huruf, atau spasi gaib (hanya sisakan angka dan titik)
+set "CLEAN_VER="
+for /f "delims=" %%A in ("!REMOTE_VER!") do set "RAW_STR=%%A"
+for /l %%I in (0,1,15) do (
+    set "CH=!RAW_STR:~%%I,1!"
+    if defined CH (
+        for %%C in (0 1 2 3 4 5 6 7 8 9 .) do (
+            if "!CH!"=="%%C" set "CLEAN_VER=!CLEAN_VER!%%C"
+        )
+    )
+)
+set "REMOTE_VER=!CLEAN_VER!"
+if not defined REMOTE_VER goto MENU
+
 set "IS_NEW="
 call :VerToNum CUR_NUM "!CURRENT_VER!"
 call :VerToNum REM_NUM "!REMOTE_VER!"
@@ -108,29 +119,32 @@ if defined REM_NUM if defined CUR_NUM (
 if /i not "!IS_NEW!"=="YES" goto MENU
 echo [*] Versi baru terdeteksi: v!REMOTE_VER!
 echo [*] Mengunduh pembaruan...
-set "UPDATER_TMP=%TEMP%\upd_%RANDOM%.bat"
+set "UPDATER_TMP=%TEMP%\upd_!RANDOM!.bat"
 
 if "!HAS_CURL!"=="1" (
-    curl.exe -L -s --fail --connect-timeout 4 -m 15 -o "!UPDATER_TMP!" "!UPDATE_URL!" >nul 2>&1
-) else (
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "try { [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; (New-Object Net.WebClient).DownloadFile('%UPDATE_URL%', '!UPDATER_TMP!') } catch {}" >nul 2>&1
+    curl.exe -L -s -k --fail --connect-timeout 4 -m 15 -o "!UPDATER_TMP!" "!UPDATE_URL!!NOCACHE!" >nul 2>&1
+)
+if not exist "!UPDATER_TMP!" if "!HAS_PS!"=="1" (
+    powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { [Net.ServicePointManager]::SecurityProtocol = 3072; $r = [Net.WebRequest]::Create('!UPDATE_URL!!NOCACHE!'); $r.Timeout = 12000; $r.CachePolicy = New-Object Net.Cache.RequestCachePolicy([Net.Cache.RequestCacheLevel]::NoCacheNoStore); $resp =$r.GetResponse(); $s =$resp.GetResponseStream(); $fs = [IO.File]::Create('!UPDATER_TMP!');$s.CopyTo($fs);$fs.Close(); $s.Close();$resp.Close() } catch {}" >nul 2>&1
 )
 
 if not exist "!UPDATER_TMP!" goto SKIP_UPDATE
+:: Validasi isi file agar tidak menimpa script dengan halaman error 404/HTML
 findstr /i /c:":MENU" "!UPDATER_TMP!" >nul 2>&1 || goto SKIP_UPDATE
 findstr /i /c:"CURRENT_VER" "!UPDATER_TMP!" >nul 2>&1 || goto SKIP_UPDATE
 
-echo [OK] Memasang versi baru...
-set "SELF_RUNNER=%TEMP%\rep_%RANDOM%.bat"
+echo [OK] Memasang versi baru v!REMOTE_VER!...
+set "SELF_RUNNER=%TEMP%\rep_!RANDOM!.bat"
 (
 echo @echo off
 echo timeout /t 1 /nobreak ^>nul
-echo copy /y "!UPDATER_TMP!" "%~f0" ^>nul
-echo del /f /q "!UPDATER_TMP!" ^>nul
+echo copy /y "!UPDATER_TMP!" "%~f0" ^>nul 2^>^&1
+echo del /f /q "!UPDATER_TMP!" ^>nul 2^>^&1
 echo start "" "%~f0"
-echo del /f /q "%%~f0" ^>nul
+echo del /f /q "%%~f0" ^>nul 2^>^&1
+echo exit
 ) > "!SELF_RUNNER!"
-start "" /min "!SELF_RUNNER!"
+start "" /min cmd.exe /c "!SELF_RUNNER!"
 exit /b 0
 
 :SKIP_UPDATE
@@ -187,7 +201,6 @@ echo  MEMULAI OPTIMASI SISTEM ^(MODE: !DISK_TYPE! - POS ^& PC REGULER SAFE^)
 echo ==========================================================================
 echo.
 echo [1/9] Mengatur Layanan Background ^& Disk I/O...
-:: Penanganan khusus Windows 10 2015-2018 (Superfetch) vs 2018-2022 (SysMain)
 if /i "!DISK_TYPE!"=="SSD" (
     echo  - Disk adalah SSD: Menjaga SysMain/Superfetch tetap optimal.
     call :ManagePrefetch auto
@@ -197,7 +210,6 @@ if /i "!DISK_TYPE!"=="SSD" (
     call :ManagePrefetch disabled
     call :ManageService WSearch disabled
 )
-:: Telemetri & Layanan berat yang aman dimatikan di POS maupun PC Kantor
 call :ManageService DiagTrack disabled
 call :ManageService dmwappushservice demand
 call :ManageService MapsBroker disabled
@@ -218,10 +230,8 @@ reg add "HKCU\Control Panel\Desktop\WindowMetrics" /v MinAnimate /t REG_SZ /d "0
 reg add "HKCU\Control Panel\Desktop" /v AutoEndTasks /t REG_SZ /d "1" /f >nul 2>&1
 reg add "HKCU\Control Panel\Desktop" /v HungAppTimeout /t REG_SZ /d "2000" /f >nul 2>&1
 reg add "HKCU\Control Panel\Desktop" /v WaitToKillAppTimeout /t REG_SZ /d "3000" /f >nul 2>&1
-:: Background Apps (Tersedia di semua build Win 10 2015-2022)
 reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" /v GlobalUserDisabled /t REG_DWORD /d 1 /f >nul 2>&1
 reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Search" /v BackgroundAppGlobalToggle /t REG_DWORD /d 0 /f >nul 2>&1
-:: Matikan Content Delivery (Iklan/Bloatware otomatis yang sering bikin HDD sibuk)
 reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SilentInstalledAppsEnabled /t REG_DWORD /d 0 /f >nul 2>&1
 echo  - Delay menu, aplikasi latar belakang, dan timeout aplikasi macet dioptimalkan.
 echo.
@@ -282,7 +292,6 @@ echo.
 
 echo [9/9] Mengatur Power Plan ^& Mencegah Disk/USB Sleep ^(Penting untuk POS^)...
 powercfg /setactive %GUID_HIGH% >nul 2>&1 || powercfg /setactive SCHEME_MIN >nul 2>&1
-:: Mencegah Harddisk mati otomatis (0 = Never) agar transaksi kasir tidak jeda/hang
 powercfg /change disk-timeout-ac 0 >nul 2>&1
 echo  - Power Plan disetel ke High Performance ^& Harddisk disetel agar tidak pernah Sleep.
 echo.
@@ -444,8 +453,6 @@ goto MENU
 :: ======================================================================
 :DetectDisk
 set "DISK_TYPE=HDD"
-
-:: Metode 1: PowerShell Get-PhysicalDisk / MSFT_PhysicalDisk (Bersih dari bug CR WMIC)
 if "!HAS_PS!"=="1" (
     for /f "delims=" %%A in ('powershell.exe -NoProfile -NonInteractive -Command "try { $d = Get-Partition -DriveLetter '\%SystemDrive:~0,1\%' -ErrorAction Stop \vert{} Get-Disk \vert{} Get-PhysicalDisk; if ($d.MediaType -eq 'SSD' -or $d.SpindleSpeed -eq 0) { 'SSD' } elseif ($d.MediaType -eq 'HDD') { 'HDD' } } catch {}" 2^>nul') do (
         if /i "%%A"=="SSD" set "DISK_TYPE=SSD"
@@ -453,8 +460,6 @@ if "!HAS_PS!"=="1" (
     )
     if "!DISK_TYPE!"=="SSD" exit /b 0
 )
-
-:: Metode 2: WMIC MSFT_PhysicalDisk (Tersedia sejak Win 10 2015 / Build 10240)
 where wmic.exe >nul 2>&1
 if not errorlevel 1 (
     for /f "tokens=2 delims==" %%A in ('wmic /namespace:\\root\microsoft\windows\storage path MSFT_PhysicalDisk get MediaType /value 2^>nul ^| findstr "="') do (
@@ -463,8 +468,6 @@ if not errorlevel 1 (
         )
     )
     if "!DISK_TYPE!"=="SSD" exit /b 0
-
-    :: Metode 3: Fallback cek nama model disk via WMIC
     for /f "tokens=*" %%A in ('wmic diskdrive get Model 2^>nul') do (
         echo %%A | findstr /i "SSD NVMe Solid" >nul 2>&1 && set "DISK_TYPE=SSD"
     )
@@ -472,7 +475,6 @@ if not errorlevel 1 (
 exit /b 0
 
 :ManagePrefetch
-:: Menangani perbedaan nama layanan antara Win 10 2015-2018 (Superfetch) & 2018-2022 (SysMain)
 %SystemRoot%\System32\sc.exe query "SysMain" >nul 2>&1
 if not errorlevel 1 (
     call :ManageService SysMain %~1
@@ -523,7 +525,6 @@ exit /b 0
 :CleanSafeTemp
 set "TARGET_DIR=%~1"
 if not exist "%TARGET_DIR%\" exit /b 0
-:: Hanya menghapus file yang tidak sedang dikunci oleh aplikasi POS/Kantor yang berjalan
 del /f /q "%TARGET_DIR%\*.tmp" >nul 2>&1
 del /f /q "%TARGET_DIR%\*.bak" >nul 2>&1
 del /f /q "%TARGET_DIR%\*.old" >nul 2>&1
@@ -540,9 +541,6 @@ exit /b 0
 :VerToNum
 set "OUTVAR=%~1"
 set "RAW=%~2"
-set "RAW=!RAW:v=!"
-set "RAW=!RAW:V=!"
-set "RAW=!RAW: =!"
 set "P1=0" & set "P2=0" & set "P3=0" & set "P4=0"
 for /f "tokens=1-4 delims=." %%A in ("!RAW!") do (
     if not "%%A"=="" set "P1=%%A"
