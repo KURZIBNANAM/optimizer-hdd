@@ -1,14 +1,14 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
-title SYSTEM OPTIMIZER WINDOWS 10 (HDD/SSD) - BM JAYA 2 v2.1
+title SYSTEM OPTIMIZER WINDOWS 10 (HDD/SSD) - BM JAYA 2 v2.2
 
 :: ======================================================================
 :: IDENTITAS & KONFIGURASI
 :: Kompatibel: Windows 10 2015 (1507/Build 10240) s/d 2022 (22H2/19045)
 :: Target    : PC Kasir (POS) & PC Kantor/Reguler (Prioritas HDD & SSD)
-:: Prinsip   : Zero Log / Tanpa File Sampah
+:: Prinsip   : Zero Log / Tanpa File Sampah / Anti-Crash Syntax
 :: ======================================================================
-set "CURRENT_VER=2.1"
+set "CURRENT_VER=2.2"
 set "APP_NAME=System Optimizer Windows 10 (POS & Office)"
 set "VER_URL=https://raw.githubusercontent.com/KURZIBNANAM/optimizer-hdd/main/version.txt"
 set "UPDATE_URL=https://raw.githubusercontent.com/KURZIBNANAM/optimizer-hdd/main/optimizer.bat"
@@ -18,7 +18,7 @@ set "GUID_BALANCED=381b4222-f694-41f0-9685-ff5bb260df2e"
 :: ======================================================================
 :: CEK ADMINISTRATOR + AUTO UAC
 :: ======================================================================
-fltmc >nul 2>&1
+%SystemRoot%\System32\fltmc.exe >nul 2>&1
 if errorlevel 1 (
     where powershell.exe >nul 2>&1
     if errorlevel 1 (
@@ -47,7 +47,7 @@ if errorlevel 1 (
 )
 
 pushd "%~dp0" >nul 2>&1
-mode con: cols=88 lines=40 >nul 2>&1
+mode con: cols=88 lines=42 >nul 2>&1
 color 0B
 
 :: ======================================================================
@@ -75,7 +75,7 @@ if "!HAS_PS!"=="0" if "!HAS_CURL!"=="0" goto MENU
 cls
 echo.
 echo ==========================================================================
-echo %APP_NAME% - BM JAYA 2 v%CURRENT_VER%
+echo !APP_NAME! - BM JAYA 2 v!CURRENT_VER!
 echo ==========================================================================
 echo.
 echo [*] Memeriksa pembaruan script...
@@ -93,6 +93,8 @@ if "!HAS_CURL!"=="1" (
 
 if not defined REMOTE_VER goto MENU
 
+:: Bersihkan karakter tersembunyi/CR dari versi remote
+for /f "tokens=1 delims= " %%Z in ("!REMOTE_VER!") do set "REMOTE_VER=%%Z"
 set "REMOTE_VER=!REMOTE_VER:v=!"
 set "REMOTE_VER=!REMOTE_VER:V=!"
 set "REMOTE_VER=!REMOTE_VER: =!"
@@ -142,16 +144,16 @@ set "UPDATER_TMP="
 cls
 echo.
 echo ==========================================================================
-echo  %APP_NAME% [v%CURRENT_VER%]
+echo  !APP_NAME! [v!CURRENT_VER!]
 echo  Pengembang : Khairullah Irfansyah, S.Kom
 echo  Unit       : BM JAYA 2
-echo  Target     : Komputer Kasir (POS) ^& PC Reguler (2015 - 2022)
-echo  Sistem     : Windows 10 %WIN_VER% (Build %WIN_BUILD%) ^| Disk: !DISK_TYPE!
+echo  Target     : Komputer Kasir ^(POS^) ^& PC Reguler ^(2015 - 2022^)
+echo  Sistem     : Windows 10 !WIN_VER! ^(Build !WIN_BUILD!^) ^| Disk: !DISK_TYPE!
 echo ==========================================================================
 echo.
-echo  [1] Jalankan Optimasi Sistem (Otomatis Sesuai !DISK_TYPE! ^& Aman untuk POS)
+echo  [1] Jalankan Optimasi Sistem ^(Otomatis Sesuai !DISK_TYPE! ^& Aman untuk POS^)
 echo  [2] Kembalikan ke Standar Default Windows
-echo  [3] Cek Status Sistem Singkat (Diagnostik)
+echo  [3] Cek Status Sistem Singkat ^(Diagnostik^)
 echo  [4] Keluar
 echo.
 where choice.exe >nul 2>&1
@@ -167,7 +169,7 @@ goto MENU
 :MENU_FALLBACK
 set "MENU_CHOICE="
 set /p "MENU_CHOICE= Pilih menu [1-4]: "
-set "MENU_CHOICE=!MENU_CHOICE: =!"
+if defined MENU_CHOICE set "MENU_CHOICE=!MENU_CHOICE: =!"
 if "!MENU_CHOICE!"=="4" goto QUIT
 if "!MENU_CHOICE!"=="3" goto DIAGNOSTICS
 if "!MENU_CHOICE!"=="2" goto RESTORE_DEFAULTS
@@ -181,7 +183,7 @@ goto MENU
 cls
 echo.
 echo ==========================================================================
-echo  MEMULAI OPTIMASI SISTEM (MODE: !DISK_TYPE! - POS ^& PC REGULER SAFE)
+echo  MEMULAI OPTIMASI SISTEM ^(MODE: !DISK_TYPE! - POS ^& PC REGULER SAFE^)
 echo ==========================================================================
 echo.
 echo [1/9] Mengatur Layanan Background ^& Disk I/O...
@@ -206,7 +208,7 @@ echo.
 
 echo [2/9] Mengelola Storage ^& Hibernasi...
 powercfg -h off >nul 2>&1
-echo  - Hibernasi dinonaktifkan (menghemat ruang GB di %SystemDrive% ^& kurangi beban tulis).
+echo  - Hibernasi dinonaktifkan ^(hemat ruang GB di %SystemDrive% ^& kurangi beban tulis^).
 echo.
 
 echo [3/9] Optimasi Responsivitas UI ^& Memori Aplikasi Latar...
@@ -233,22 +235,22 @@ reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" 
 reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ListviewAlphaSelect /t REG_DWORD /d 0 /f >nul 2>&1
 reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ListviewShadow /t REG_DWORD /d 0 /f >nul 2>&1
 reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v TaskbarAnimations /t REG_DWORD /d 0 /f >nul 2>&1
-echo  - Transparansi dan animasi berat telah dimatikan (Font tetap halus/tidak pecah).
+echo  - Transparansi dan animasi berat telah dimatikan ^(Font tetap halus/tidak pecah^).
 echo.
 
-echo [5/9] Mengoptimalkan File System (NTFS)...
+echo [5/9] Mengoptimalkan File System ^(NTFS^)...
 %SystemRoot%\System32\fsutil.exe behavior set disablelastaccess 1 >nul 2>&1
 if /i "!DISK_TYPE!"=="SSD" (
     %SystemRoot%\System32\fsutil.exe behavior set DisableDeleteNotify 0 >nul 2>&1
     echo  - LastAccess dimatikan ^& fitur TRIM SSD dipastikan aktif.
 ) else (
-    echo  - Pencatatan waktu akses baca file (LastAccess) dinonaktifkan untuk meringankan HDD.
+    echo  - Pencatatan waktu akses baca file ^(LastAccess^) dinonaktifkan untuk meringankan HDD.
 )
 echo.
 
 echo [6/9] Membersihkan Cache Windows Update yang Menumpuk...
 set "WU_RUNNING="
-%SystemRoot%\System32\sc.exe query wuauserv 2>nul | findstr /i "RUNNING" >nul && set "WU_RUNNING=1"
+%SystemRoot%\System32\sc.exe query wuauserv 2>nul | findstr /i "RUNNING" >nul 2>&1 && set "WU_RUNNING=1"
 if defined WU_RUNNING (
     echo  - Menghentikan sementara layanan update...
     %SystemRoot%\System32\net.exe stop wuauserv >nul 2>&1
@@ -264,7 +266,7 @@ if defined WU_RUNNING (
 echo  - Cache unduhan Windows Update selesai dibersihkan.
 echo.
 
-echo [7/9] Membersihkan File Temporary ^& Cache DNS (Tanpa Menyentuh Data POS)...
+echo [7/9] Membersihkan File Temporary ^& Cache DNS ^(Tanpa Menyentuh Data POS^)...
 ipconfig /flushdns >nul 2>&1
 call :CleanSafeTemp "%TEMP%"
 call :CleanSafeTemp "%SystemRoot%\Temp"
@@ -278,7 +280,7 @@ for %%L in (Application System Setup) do (
 echo  - Log Application, System, dan Setup telah dikosongkan.
 echo.
 
-echo [9/9] Mengatur Power Plan ^& Mencegah Disk/USB Sleep (Penting untuk POS)...
+echo [9/9] Mengatur Power Plan ^& Mencegah Disk/USB Sleep ^(Penting untuk POS^)...
 powercfg /setactive %GUID_HIGH% >nul 2>&1 || powercfg /setactive SCHEME_MIN >nul 2>&1
 :: Mencegah Harddisk mati otomatis (0 = Never) agar transaksi kasir tidak jeda/hang
 powercfg /change disk-timeout-ac 0 >nul 2>&1
@@ -286,10 +288,10 @@ echo  - Power Plan disetel ke High Performance ^& Harddisk disetel agar tidak pe
 echo.
 
 echo ==========================================================================
-echo  [OK] OPTIMASI SELESAI (v%CURRENT_VER% - Mode !DISK_TYPE!)
+echo  [OK] OPTIMASI SELESAI ^(v!CURRENT_VER! - Mode !DISK_TYPE!^)
 echo ==========================================================================
 echo  - Beban I/O disk dikurangi secara signifikan.
-echo  - Printer kasir (Spooler), Jaringan/LAN, dan Database POS 100%% AMAN.
+echo  - Printer kasir ^(Spooler^), Jaringan/LAN, dan Database POS 100%% AMAN.
 echo  - Tidak ada file .log atau sampah yang ditinggalkan oleh script ini.
 echo.
 where choice.exe >nul 2>&1
@@ -305,12 +307,13 @@ if /i "!EXP_CHOICE!"=="Y" goto RESTART_EXPLORER
 goto MENU
 
 :RESTART_EXPLORER
+echo.
 echo [*] Me-restart Windows Explorer...
 taskkill /f /im explorer.exe >nul 2>&1
 timeout /t 1 /nobreak >nul
 start "" "%SystemRoot%\explorer.exe"
 echo [OK] Explorer berhasil dijalankan ulang.
-timeout /t 1 /nobreak >nul
+timeout /t 2 /nobreak >nul
 goto MENU
 
 :: ======================================================================
@@ -401,9 +404,9 @@ echo.
 echo [Identitas PC]
 echo  - Nama PC     : %COMPUTERNAME%
 echo  - Pengguna    : %USERNAME%
-echo  - Versi OS    : Windows 10 %WIN_VER% (Build %WIN_BUILD%)
+echo  - Versi OS    : Windows 10 !WIN_VER! ^(Build !WIN_BUILD!^)
 echo.
-echo [Storage / Disk Utama (%SystemDrive%)]
+echo [Storage / Disk Utama ^(%SystemDrive%^)]
 call :DetectDisk
 echo  - Tipe Disk   : !DISK_TYPE!
 set "FREE_GB="
@@ -440,24 +443,31 @@ goto MENU
 :: SUB-ROUTINES (FUNGSI PENDUKUNG)
 :: ======================================================================
 :DetectDisk
-:: Default adalah HDD sesuai mayoritas populasi target
 set "DISK_TYPE=HDD"
 
-:: Metode 1: WMIC MSFT_PhysicalDisk (Tersedia sejak Win 10 2015 / Build 10240)
-:: MediaType 4 = SSD, MediaType 3 = HDD, SpindleSpeed 0 = SSD
-for /f "tokens=2 delims==" %%A in ('wmic /namespace:\\root\microsoft\windows\storage path MSFT_PhysicalDisk get MediaType /value 2^>nul ^| findstr "="') do (
-    set "MT=%%A"
-    set "MT=!MT: =!"
-    for /f "delims=" %%B in ("!MT!") do (
-        if "%%B"=="4" set "DISK_TYPE=SSD"
-        if "%%B"=="3" set "DISK_TYPE=HDD"
+:: Metode 1: PowerShell Get-PhysicalDisk / MSFT_PhysicalDisk (Bersih dari bug CR WMIC)
+if "!HAS_PS!"=="1" (
+    for /f "delims=" %%A in ('powershell.exe -NoProfile -NonInteractive -Command "try { $d = Get-Partition -DriveLetter '\%SystemDrive:~0,1\%' -ErrorAction Stop \vert{} Get-Disk \vert{} Get-PhysicalDisk; if ($d.MediaType -eq 'SSD' -or $d.SpindleSpeed -eq 0) { 'SSD' } elseif ($d.MediaType -eq 'HDD') { 'HDD' } } catch {}" 2^>nul') do (
+        if /i "%%A"=="SSD" set "DISK_TYPE=SSD"
+        if /i "%%A"=="HDD" set "DISK_TYPE=HDD"
     )
+    if "!DISK_TYPE!"=="SSD" exit /b 0
 )
-if "!DISK_TYPE!"=="SSD" exit /b 0
 
-:: Metode 2: Fallback cek model disk via WMIC (Jika driver storage lawas tidak lapor MediaType)
-for /f "tokens=*" %%A in ('wmic diskdrive get Model 2^>nul') do (
-    echo %%A | findstr /i "SSD NVMe Solid" >nul 2>&1 && set "DISK_TYPE=SSD"
+:: Metode 2: WMIC MSFT_PhysicalDisk (Tersedia sejak Win 10 2015 / Build 10240)
+where wmic.exe >nul 2>&1
+if not errorlevel 1 (
+    for /f "tokens=2 delims==" %%A in ('wmic /namespace:\\root\microsoft\windows\storage path MSFT_PhysicalDisk get MediaType /value 2^>nul ^| findstr "="') do (
+        for /f "tokens=1" %%B in ("%%A") do (
+            if "%%B"=="4" set "DISK_TYPE=SSD"
+        )
+    )
+    if "!DISK_TYPE!"=="SSD" exit /b 0
+
+    :: Metode 3: Fallback cek nama model disk via WMIC
+    for /f "tokens=*" %%A in ('wmic diskdrive get Model 2^>nul') do (
+        echo %%A | findstr /i "SSD NVMe Solid" >nul 2>&1 && set "DISK_TYPE=SSD"
+    )
 )
 exit /b 0
 
@@ -495,13 +505,18 @@ if /i "%ACTION%"=="disabled" (
     %SystemRoot%\System32\sc.exe stop "%SVC%" >nul 2>&1
     %SystemRoot%\System32\sc.exe config "%SVC%" start= disabled >nul 2>&1
     echo  - %SVC% : Dimatikan [Disabled]
-) else if /i "%ACTION%"=="demand" (
+    exit /b 0
+)
+if /i "%ACTION%"=="demand" (
     %SystemRoot%\System32\sc.exe config "%SVC%" start= demand >nul 2>&1
     echo  - %SVC% : Disetel Manual [On-Demand]
-) else if /i "%ACTION%"=="auto" (
+    exit /b 0
+)
+if /i "%ACTION%"=="auto" (
     %SystemRoot%\System32\sc.exe config "%SVC%" start= auto >nul 2>&1
     %SystemRoot%\System32\sc.exe start "%SVC%" >nul 2>&1
     echo  - %SVC% : Diaktifkan [Auto]
+    exit /b 0
 )
 exit /b 0
 
