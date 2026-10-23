@@ -1,14 +1,18 @@
 @echo off
-setlocal EnableExtensions EnableDelayedExpansion
-title SYSTEM OPTIMIZER WINDOWS 10 (HDD/SSD) - BM JAYA 2 v2.2
+setlocal EnableExtensions DisableDelayedExpansion
+title SYSTEM OPTIMIZER WINDOWS 10 (HDD/SSD) - BM JAYA 2 v2.3
 
 :: ======================================================================
 :: IDENTITAS & KONFIGURASI
-:: Kompatibel: Windows 10 2015 (1507/Build 10240) s/d 2022 (22H2/19045)
+:: Kompatibel: Windows 10 2015 (1507/Build 10240) s/d Terbaru (22H2/19045)
 :: Target    : PC Kasir (POS) & PC Kantor/Reguler (Prioritas HDD & SSD)
-:: Prinsip   : Zero Log / Tanpa File Sampah / Anti-Crash Syntax
+:: Prinsip   : Zero Log / Aman Sharing Printer / Aman IP Statis
 :: ======================================================================
-set "CURRENT_VER=2.2"
+set "SELF_PATH=%~f0"
+set "SELF_DIR=%~dp0"
+setlocal EnableDelayedExpansion
+
+set "CURRENT_VER=2.3"
 set "APP_NAME=System Optimizer Windows 10 (POS & Office)"
 set "VER_URL=https://raw.githubusercontent.com/KURZIBNANAM/optimizer-hdd/main/version.txt"
 set "UPDATE_URL=https://raw.githubusercontent.com/KURZIBNANAM/optimizer-hdd/main/optimizer.bat"
@@ -16,7 +20,7 @@ set "GUID_HIGH=8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"
 set "GUID_BALANCED=381b4222-f694-41f0-9685-ff5bb260df2e"
 
 :: ======================================================================
-:: CEK ADMINISTRATOR + AUTO UAC
+:: CEK ADMINISTRATOR + AUTO UAC (AMAN KARAKTER SPESIAL & SPASI)
 :: ======================================================================
 %SystemRoot%\System32\fltmc.exe >nul 2>&1
 if errorlevel 1 (
@@ -34,7 +38,7 @@ if errorlevel 1 (
     )
     echo.
     echo [*] Meminta hak Administrator via UAC...
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "try { Start-Process -FilePath '%~f0' -Verb RunAs } catch { exit 1 }"
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "try { Start-Process -FilePath $env:SELF_PATH -Verb RunAs } catch { exit 1 }"
     if errorlevel 1 (
         echo.
         echo [!] UAC dibatalkan atau gagal.
@@ -46,29 +50,33 @@ if errorlevel 1 (
     exit /b 0
 )
 
-pushd "%~dp0" >nul 2>&1
-mode con: cols=88 lines=42 >nul 2>&1
+pushd "!SELF_DIR!" >nul 2>&1
+mode con: cols=88 lines=44 >nul 2>&1
 color 0B
 
+:: Bersihkan sisa file updater sementara jika ada dari sesi sebelumnya
+del /f /q "%TEMP%\upd_*.bat" "%TEMP%\rep_*.bat" >nul 2>&1
+
 :: ======================================================================
-:: DETEKSI VERSI WINDOWS & TOOLS (2015 - 2022 COMPATIBLE)
+:: DETEKSI VERSI WINDOWS & TOOLS (1507 BUILD 10240 - 22H2 BUILD 19045)
 :: ======================================================================
 set "WIN_BUILD=Unknown"
 set "WIN_VER=Win10"
 for /f "tokens=3" %%A in ('reg query "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion" /v CurrentBuildNumber 2^>nul ^| findstr /i "CurrentBuildNumber"') do set "WIN_BUILD=%%A"
 for /f "tokens=3" %%A in ('reg query "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion" /v ReleaseId 2^>nul ^| findstr /i "ReleaseId"') do set "WIN_VER=%%A"
 for /f "tokens=3" %%A in ('reg query "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion" /v DisplayVersion 2^>nul ^| findstr /i "DisplayVersion"') do set "WIN_VER=%%A"
+if "!WIN_BUILD!"=="10240" if "!WIN_VER!"=="Win10" set "WIN_VER=1507"
 
 set "HAS_CURL=0"
 set "HAS_PS=0"
 where curl.exe >nul 2>&1 && set "HAS_CURL=1"
 where powershell.exe >nul 2>&1 && set "HAS_PS=1"
 
-:: Deteksi awal tipe disk agar tampil di Menu Utama
+:: Deteksi awal tipe disk sistem (%SystemDrive%) agar tampil di Menu Utama
 call :DetectDisk
 
 :: ======================================================================
-:: AUTO UPDATE (ANTI-HANG, ANTI-CACHE, KOMPATIBEL WIN 10 2015-2022)
+:: AUTO UPDATE (ANTI-HANG, ANTI-CACHE, KOMPATIBEL WIN 10 2015-2022+)
 :: ======================================================================
 :CHECK_UPDATE
 if "!HAS_PS!"=="0" if "!HAS_CURL!"=="0" goto MENU
@@ -80,7 +88,7 @@ echo ==========================================================================
 echo.
 echo [*] Memeriksa pembaruan script...
 set "REMOTE_VER="
-set "NOCACHE=?t=!RANDOM!"
+set "NOCACHE=?t=!RANDOM!!RANDOM!"
 
 if "!HAS_CURL!"=="1" (
     for /f "usebackq tokens=1 delims= " %%A in (`curl.exe -L -s -k --fail --connect-timeout 3 -m 5 "!VER_URL!!NOCACHE!" 2^>nul`) do (
@@ -88,7 +96,7 @@ if "!HAS_CURL!"=="1" (
     )
 )
 if not defined REMOTE_VER if "!HAS_PS!"=="1" (
-    for /f "delims=" %%A in ('powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { [Net.ServicePointManager]::SecurityProtocol = 3072; $r = [Net.WebRequest]::Create('!VER_URL!!NOCACHE!');$r.Timeout = 4000; $r.CachePolicy = New-Object Net.Cache.RequestCachePolicy([Net.Cache.RequestCacheLevel]::NoCacheNoStore);$resp = $r.GetResponse();$sr = New-Object IO.StreamReader($resp.GetResponseStream());$sr.ReadToEnd().Trim(); $sr.Close();$resp.Close() } catch {}" 2^>nul') do (
+    for /f "delims=" %%A in ('powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { [Net.ServicePointManager]::SecurityProtocol = 3072; $r = [Net.WebRequest]::Create('!VER_URL!!NOCACHE!'); $r.Timeout = 4000; $r.CachePolicy = New-Object Net.Cache.RequestCachePolicy([Net.Cache.RequestCacheLevel]::NoCacheNoStore); $resp = $r.GetResponse(); $sr = New-Object IO.StreamReader($resp.GetResponseStream()); $sr.ReadToEnd().Trim(); $sr.Close(); $resp.Close() } catch {}" 2^>nul') do (
         if not defined REMOTE_VER set "REMOTE_VER=%%A"
     )
 )
@@ -125,7 +133,7 @@ if "!HAS_CURL!"=="1" (
     curl.exe -L -s -k --fail --connect-timeout 4 -m 15 -o "!UPDATER_TMP!" "!UPDATE_URL!!NOCACHE!" >nul 2>&1
 )
 if not exist "!UPDATER_TMP!" if "!HAS_PS!"=="1" (
-    powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { [Net.ServicePointManager]::SecurityProtocol = 3072; $r = [Net.WebRequest]::Create('!UPDATE_URL!!NOCACHE!'); $r.Timeout = 12000; $r.CachePolicy = New-Object Net.Cache.RequestCachePolicy([Net.Cache.RequestCacheLevel]::NoCacheNoStore); $resp =$r.GetResponse(); $s =$resp.GetResponseStream(); $fs = [IO.File]::Create('!UPDATER_TMP!');$s.CopyTo($fs);$fs.Close(); $s.Close();$resp.Close() } catch {}" >nul 2>&1
+    powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { [Net.ServicePointManager]::SecurityProtocol = 3072; $r = [Net.WebRequest]::Create('!UPDATE_URL!!NOCACHE!'); $r.Timeout = 12000; $r.CachePolicy = New-Object Net.Cache.RequestCachePolicy([Net.Cache.RequestCacheLevel]::NoCacheNoStore); $resp = $r.GetResponse(); $s = $resp.GetResponseStream(); $fs = [IO.File]::Create('!UPDATER_TMP!'); $s.CopyTo($fs); $fs.Close(); $s.Close(); $resp.Close() } catch {}" >nul 2>&1
 )
 
 if not exist "!UPDATER_TMP!" goto SKIP_UPDATE
@@ -138,13 +146,13 @@ set "SELF_RUNNER=%TEMP%\rep_!RANDOM!.bat"
 (
 echo @echo off
 echo timeout /t 1 /nobreak ^>nul
-echo copy /y "!UPDATER_TMP!" "%~f0" ^>nul 2^>^&1
+echo copy /y "!UPDATER_TMP!" "!SELF_PATH!" ^>nul 2^>^&1
 echo del /f /q "!UPDATER_TMP!" ^>nul 2^>^&1
-echo start "" "%~f0"
-echo del /f /q "%%~f0" ^>nul 2^>^&1
-echo exit
+echo start "" cmd.exe /c ""!SELF_PATH!""
+echo ^(goto^) 2^>nul ^& del /f /q "%%~f0" ^>nul 2^>^&1 ^& exit
 ) > "!SELF_RUNNER!"
-start "" /min cmd.exe /c "!SELF_RUNNER!"
+popd >nul 2>&1
+start "" /min cmd.exe /c ""!SELF_RUNNER!""
 exit /b 0
 
 :SKIP_UPDATE
@@ -161,7 +169,7 @@ echo ==========================================================================
 echo  !APP_NAME! [v!CURRENT_VER!]
 echo  Pengembang : Khairullah Irfansyah, S.Kom
 echo  Unit       : BM JAYA 2
-echo  Target     : Komputer Kasir ^(POS^) ^& PC Reguler ^(2015 - 2022^)
+echo  Target     : Komputer Kasir ^(POS^) ^& PC Reguler ^(2015 - 2022+^)
 echo  Sistem     : Windows 10 !WIN_VER! ^(Build !WIN_BUILD!^) ^| Disk: !DISK_TYPE!
 echo ==========================================================================
 echo.
@@ -191,7 +199,7 @@ if "!MENU_CHOICE!"=="1" goto OPTIMIZE
 goto MENU
 
 :: ======================================================================
-:: 1. PROSES OPTIMASI (KOMPATIBEL WIN 10 2015-2022, POS & PC BIASA)
+:: 1. PROSES OPTIMASI (KOMPATIBEL WIN 10 1507-22H2, POS & PC BIASA)
 :: ======================================================================
 :OPTIMIZE
 cls
@@ -200,7 +208,7 @@ echo ==========================================================================
 echo  MEMULAI OPTIMASI SISTEM ^(MODE: !DISK_TYPE! - POS ^& PC REGULER SAFE^)
 echo ==========================================================================
 echo.
-echo [1/9] Mengatur Layanan Background ^& Disk I/O...
+echo [1/9] Mengatur Layanan Background ^& Proteksi Sharing Printer...
 if /i "!DISK_TYPE!"=="SSD" (
     echo  - Disk adalah SSD: Menjaga SysMain/Superfetch tetap optimal.
     call :ManagePrefetch auto
@@ -216,6 +224,10 @@ call :ManageService MapsBroker disabled
 call :ManageService WerSvc demand
 call :ManageService DoSvc demand
 call :ManageService BITS demand
+:: Pastikan layanan Sharing Printer & SMB selalu aktif & tidak terganggu
+call :ManageService Spooler auto
+call :ManageService LanmanServer auto
+call :ManageService LanmanWorkstation auto
 echo.
 
 echo [2/9] Mengelola Storage ^& Hibernasi...
@@ -259,28 +271,25 @@ if /i "!DISK_TYPE!"=="SSD" (
 echo.
 
 echo [6/9] Membersihkan Cache Windows Update yang Menumpuk...
-set "WU_RUNNING="
-%SystemRoot%\System32\sc.exe query wuauserv 2>nul | findstr /i "RUNNING" >nul 2>&1 && set "WU_RUNNING=1"
-if defined WU_RUNNING (
-    echo  - Menghentikan sementara layanan update...
+%SystemRoot%\System32\sc.exe query wuauserv 2>nul | findstr /i "RUNNING" >nul 2>&1 && (
+    echo  - Menghentikan sementara layanan Windows Update...
     %SystemRoot%\System32\net.exe stop wuauserv >nul 2>&1
+)
+%SystemRoot%\System32\sc.exe query bits 2>nul | findstr /i "RUNNING" >nul 2>&1 && (
     %SystemRoot%\System32\net.exe stop bits >nul 2>&1
 )
 if exist "%SystemRoot%\SoftwareDistribution\Download\" (
     del /f /q "%SystemRoot%\SoftwareDistribution\Download\*.*" >nul 2>&1
     for /d %%D in ("%SystemRoot%\SoftwareDistribution\Download\*") do rd /s /q "%%~fD" >nul 2>&1
 )
-if defined WU_RUNNING (
-    %SystemRoot%\System32\net.exe start wuauserv >nul 2>&1
-)
 echo  - Cache unduhan Windows Update selesai dibersihkan.
 echo.
 
-echo [7/9] Membersihkan File Temporary ^& Cache DNS ^(Tanpa Menyentuh Data POS^)...
+echo [7/9] Membersihkan File Temporary ^& Cache DNS ^(Aman untuk IP Statis ^& POS^)...
 ipconfig /flushdns >nul 2>&1
 call :CleanSafeTemp "%TEMP%"
 call :CleanSafeTemp "%SystemRoot%\Temp"
-echo  - Cache DNS dan file sampah temporary dibersihkan tanpa membuat log baru.
+echo  - Cache DNS disegarkan ^(IP Statis 100%% utuh^) ^& file sampah temporary dibersihkan.
 echo.
 
 echo [8/9] Mengosongkan Log Event Viewer Utama...
@@ -290,17 +299,24 @@ for %%L in (Application System Setup) do (
 echo  - Log Application, System, dan Setup telah dikosongkan.
 echo.
 
-echo [9/9] Mengatur Power Plan ^& Mencegah Disk/USB Sleep ^(Penting untuk POS^)...
-powercfg /setactive %GUID_HIGH% >nul 2>&1 || powercfg /setactive SCHEME_MIN >nul 2>&1
+echo [9/9] Mengatur Power Plan ^& Mencegah Disk/USB Printer Sleep...
+powercfg /setactive %GUID_HIGH% >nul 2>&1 || (
+    powercfg -duplicatescheme %GUID_HIGH% >nul 2>&1
+    powercfg /setactive %GUID_HIGH% >nul 2>&1
+)
 powercfg /change disk-timeout-ac 0 >nul 2>&1
-echo  - Power Plan disetel ke High Performance ^& Harddisk disetel agar tidak pernah Sleep.
+powercfg /change standby-timeout-ac 0 >nul 2>&1
+:: Nonaktifkan USB Selective Suspend agar koneksi USB Printer Kasir/Scanner tidak pernah putus
+powercfg /setacvalueindex SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bebba308a3 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0 >nul 2>&1
+powercfg /setactive SCHEME_CURRENT >nul 2>&1
+echo  - Power Plan High Performance aktif, Disk ^& Port USB Printer disetel Anti-Sleep.
 echo.
 
 echo ==========================================================================
 echo  [OK] OPTIMASI SELESAI ^(v!CURRENT_VER! - Mode !DISK_TYPE!^)
 echo ==========================================================================
 echo  - Beban I/O disk dikurangi secara signifikan.
-echo  - Printer kasir ^(Spooler^), Jaringan/LAN, dan Database POS 100%% AMAN.
+echo  - Sharing Printer ^(Spooler/SMB^), IP Statis LAN, dan Database POS 100%% AMAN.
 echo  - Tidak ada file .log atau sampah yang ditinggalkan oleh script ini.
 echo.
 where choice.exe >nul 2>&1
@@ -360,10 +376,11 @@ call :ManageService MapsBroker demand
 call :ManageService WerSvc demand
 call :ManageService DoSvc demand
 call :ManageService BITS demand
+call :ManageService Spooler auto
 
 echo [*] Mengembalikan Pengaturan Hibernasi ^& NTFS...
 powercfg -h on >nul 2>&1
-%SystemRoot%\System32\fsutil.exe behavior set disablelastaccess 2 >nul 2>&1
+%SystemRoot%\System32\fsutil.exe behavior set disablelastaccess 2 >nul 2>&1 || %SystemRoot%\System32\fsutil.exe behavior set disablelastaccess 0 >nul 2>&1
 
 echo [*] Mengembalikan Efek Transparansi ^& Visual...
 reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v EnableTransparency /t REG_DWORD /d 1 /f >nul 2>&1
@@ -380,10 +397,15 @@ reg add "HKCU\Control Panel\Desktop" /v DragFullWindows /t REG_SZ /d "1" /f >nul
 reg add "HKCU\Control Panel\Desktop" /v MenuShowDelay /t REG_SZ /d "400" /f >nul 2>&1
 reg add "HKCU\Control Panel\Desktop\WindowMetrics" /v MinAnimate /t REG_SZ /d "1" /f >nul 2>&1
 reg delete "HKCU\Control Panel\Desktop" /v AutoEndTasks /f >nul 2>&1
+reg add "HKCU\Control Panel\Desktop" /v HungAppTimeout /t REG_SZ /d "5000" /f >nul 2>&1
+reg add "HKCU\Control Panel\Desktop" /v WaitToKillAppTimeout /t REG_SZ /d "20000" /f >nul 2>&1
 reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" /v GlobalUserDisabled /t REG_DWORD /d 0 /f >nul 2>&1
 reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Search" /v BackgroundAppGlobalToggle /t REG_DWORD /d 1 /f >nul 2>&1
+reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SilentInstalledAppsEnabled /t REG_DWORD /d 1 /f >nul 2>&1
 powercfg /setactive %GUID_BALANCED% >nul 2>&1 || powercfg /setactive SCHEME_BALANCED >nul 2>&1
 powercfg /change disk-timeout-ac 20 >nul 2>&1
+powercfg /setacvalueindex SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bebba308a3 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 1 >nul 2>&1
+powercfg /setactive SCHEME_CURRENT >nul 2>&1
 
 echo.
 echo [OK] Seluruh pengaturan telah dikembalikan ke standar default Windows.
@@ -435,11 +457,12 @@ if /i "!TRANSP_STATUS!"=="0x0" set "TRANSP_STATUS=MATI [Dioptimasi]"
 if /i "!TRANSP_STATUS!"=="0x1" set "TRANSP_STATUS=AKTIF [Default]"
 echo  - Transparansi: !TRANSP_STATUS!
 echo.
-echo [Status Layanan Kunci]
+echo [Status Layanan Kunci ^& Printer]
 call :ShowPrefetchSvc
 call :ShowSvc WSearch
 call :ShowSvc DiagTrack
 call :ShowSvc Spooler
+call :ShowSvc LanmanServer
 echo.
 echo [Power Plan Aktif]
 for /f "delims=" %%A in ('powercfg /getactivescheme 2^>nul') do echo  - %%A
@@ -453,12 +476,13 @@ goto MENU
 :: ======================================================================
 :DetectDisk
 set "DISK_TYPE=HDD"
+set "SYS_DRV=%SystemDrive:~0,1%"
 if "!HAS_PS!"=="1" (
-    for /f "delims=" %%A in ('powershell.exe -NoProfile -NonInteractive -Command "try { $d = Get-Partition -DriveLetter '\%SystemDrive:~0,1\%' -ErrorAction Stop \vert{} Get-Disk \vert{} Get-PhysicalDisk; if ($d.MediaType -eq 'SSD' -or $d.SpindleSpeed -eq 0) { 'SSD' } elseif ($d.MediaType -eq 'HDD') { 'HDD' } } catch {}" 2^>nul') do (
+    for /f "delims=" %%A in ('powershell.exe -NoProfile -NonInteractive -Command "try { $p = Get-Partition -DriveLetter '!SYS_DRV!' -ErrorAction Stop; $d = Get-PhysicalDisk | Where-Object { $_.DeviceId -eq $p.DiskNumber }; if (-not $d) { $d = $p | Get-Disk | Get-PhysicalDisk }; if ($d.MediaType -eq 'SSD' -or $d.SpindleSpeed -eq 0 -or $d.BusType -eq 'NVMe') { 'SSD' } elseif ($d.MediaType -eq 'HDD') { 'HDD' } } catch {}" 2^>nul') do (
         if /i "%%A"=="SSD" set "DISK_TYPE=SSD"
         if /i "%%A"=="HDD" set "DISK_TYPE=HDD"
     )
-    if "!DISK_TYPE!"=="SSD" exit /b 0
+    if /i "!DISK_TYPE!"=="SSD" exit /b 0
 )
 where wmic.exe >nul 2>&1
 if not errorlevel 1 (
@@ -467,7 +491,7 @@ if not errorlevel 1 (
             if "%%B"=="4" set "DISK_TYPE=SSD"
         )
     )
-    if "!DISK_TYPE!"=="SSD" exit /b 0
+    if /i "!DISK_TYPE!"=="SSD" exit /b 0
     for /f "tokens=*" %%A in ('wmic diskdrive get Model 2^>nul') do (
         echo %%A | findstr /i "SSD NVMe Solid" >nul 2>&1 && set "DISK_TYPE=SSD"
     )
@@ -548,6 +572,8 @@ for /f "tokens=1-4 delims=." %%A in ("!RAW!") do (
     if not "%%C"=="" set "P3=%%C"
     if not "%%D"=="" set "P4=%%D"
 )
+:: Hindari bug angka oktal (leading zero seperti 08 / 09) pada set /a
+set /a "P1=1000!P1! %% 1000, P2=1000!P2! %% 1000, P3=1000!P3! %% 1000, P4=1000!P4! %% 1000" 2>nul
 set /a "!OUTVAR!=!P1!*1000000+!P2!*10000+!P3!*100+!P4!" 2>nul
 exit /b 0
 
@@ -555,5 +581,6 @@ exit /b 0
 :: KELUAR
 :: ======================================================================
 :QUIT
+popd >nul 2>&1
 endlocal
 exit /b 0
