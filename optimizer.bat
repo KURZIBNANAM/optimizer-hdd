@@ -158,7 +158,7 @@ echo  MEMULAI OPTIMASI AMAN ^(MODE DISK: !DISK_TYPE!^)
 echo ======================================================================
 echo.
 
-echo [1/6] Mengatur layanan latar dan menjaga printer/network sharing...
+echo [1/7] Mengatur layanan latar dan menjaga printer/network sharing...
 if /i "!DISK_TYPE!"=="HDD" (
     echo  - Disk sistem HDD: SysMain dinonaktifkan untuk mengurangi I/O acak.
     call :ManagePrefetch disabled
@@ -178,7 +178,7 @@ call :ManageService LanmanServer auto
 call :ManageService LanmanWorkstation auto
 echo.
 
-echo [2/6] Mengoptimalkan perilaku NTFS...
+echo [2/7] Mengoptimalkan perilaku NTFS...
 set "_FSUTIL_VAL=1"
 if not "!WIN_BUILD!"=="Unknown" (
     if !WIN_BUILD! GEQ 17134 set "_FSUTIL_VAL=3"
@@ -192,14 +192,14 @@ if /i "!DISK_TYPE!"=="SSD" (
 )
 echo.
 
-echo [3/6] Mengatur respons antarmuka tanpa memaksa aplikasi POS ditutup...
+echo [3/7] Mengatur respons antarmuka tanpa memaksa aplikasi POS ditutup...
 reg add "HKCU\Control Panel\Desktop" /v MenuShowDelay /t REG_SZ /d "0" /f >nul 2>&1
 reg add "HKCU\Control Panel\Desktop" /v DragFullWindows /t REG_SZ /d "0" /f >nul 2>&1
 reg add "HKCU\Control Panel\Desktop\WindowMetrics" /v MinAnimate /t REG_SZ /d "0" /f >nul 2>&1
 echo  - Menu dan animasi jendela dipercepat; timeout aplikasi tidak diubah.
 echo.
 
-echo [4/6] Mengurangi efek visual berat untuk pengguna saat ini...
+echo [4/7] Mengurangi efek visual berat untuk pengguna saat ini...
 reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v EnableTransparency /t REG_DWORD /d 0 /f >nul 2>&1
 reg add "HKCU\SOFTWARE\Microsoft\Windows\DWM" /v EnableAeroPeek /t REG_DWORD /d 0 /f >nul 2>&1
 reg delete "HKCU\SOFTWARE\Microsoft\Windows\DWM" /v AlwaysHibernateThumbnails /f >nul 2>&1
@@ -210,21 +210,26 @@ reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v Ta
 echo  - Transparansi dan animasi berat dimatikan tanpa kebijakan semua pengguna.
 echo.
 
-echo [5/6] Menyegarkan cache DNS...
+echo [5/7] Menyegarkan cache DNS...
 ipconfig /flushdns >nul 2>&1
-echo  - IP statis, printer sharing, database POS, dan file temporary tidak diubah.
+echo  - Cache DNS disegarkan; IP statis, printer sharing, dan database POS aman.
 echo.
 
-echo [6/6] Mengatur daya agar disk dan USB printer tidak sleep saat terhubung listrik...
+echo [6/7] Mengatur daya agar disk dan USB printer tidak sleep saat terhubung listrik...
 call :SetOptimizedPower
 echo  - High Performance aktif; disk, sleep, dan USB selective suspend pada AC disetel aman.
+echo.
+
+echo [7/7] Membersihkan berkas sampah (Temp, Cache AppData aman, ^& Recycle Bin)...
+call :CleanJunk
+echo  - Temp pengguna, Temp sistem, cache dump AppData, dan Recycle Bin telah dibersihkan.
 echo.
 
 echo ======================================================================
 echo  [OK] OPTIMASI SELESAI ^(v!CURRENT_VER! - Mode !DISK_TYPE!^)
 echo ======================================================================
-echo  - Tidak membuat atau menghapus berkas .log.
-echo  - Tidak menghapus Event Viewer, cache Windows Update, atau file temporary aplikasi.
+echo  - Tidak membuat atau menghapus berkas .log penting.
+echo  - Berkas sampah (%TEMP%, Windows Temp, Cache AppData, Recycle Bin) dibersihkan.
 echo  - Sharing printer ^(Spooler/SMB^), IP statis LAN, dan data POS tidak diubah.
 echo.
 where choice.exe >nul 2>&1
@@ -291,6 +296,7 @@ call :ManageService LanmanWorkstation auto
 echo [*] Mengembalikan perilaku NTFS dan tampilan...
 %SystemRoot%\System32\fsutil.exe behavior set disablelastaccess 2 >nul 2>&1 || %SystemRoot%\System32\fsutil.exe behavior set disablelastaccess 0 >nul 2>&1
 reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v EnableTransparency /t REG_DWORD /d 1 /f >nul 2>&1
+reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v EnableAeroPeek /t REG_DWORD /d 1 /f >nul 2>&1
 reg add "HKCU\SOFTWARE\Microsoft\Windows\DWM" /v EnableAeroPeek /t REG_DWORD /d 1 /f >nul 2>&1
 reg delete "HKCU\SOFTWARE\Microsoft\Windows\DWM" /v AlwaysHibernateThumbnails /f >nul 2>&1
 reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 0 /f >nul 2>&1
@@ -484,6 +490,51 @@ powercfg /change disk-timeout-ac 20 >nul 2>&1
 powercfg /change standby-timeout-ac 30 >nul 2>&1
 powercfg /setacvalueindex SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bebba308a3 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 1 >nul 2>&1
 powercfg /setactive SCHEME_CURRENT >nul 2>&1
+exit /b 0
+
+:CleanJunk
+:: 1. Bersihkan %TEMP% (AppData\Local\Temp milik user saat ini)
+if defined TEMP if exist "%TEMP%\" (
+    del /f /s /q "%TEMP%\*" >nul 2>&1
+    for /d %%D in ("%TEMP%\*") do rd /s /q "%%~fD" >nul 2>&1
+)
+:: 2. Bersihkan Windows Temp (%SystemRoot%\Temp)
+if exist "%SystemRoot%\Temp\" (
+    del /f /s /q "%SystemRoot%\Temp\*" >nul 2>&1
+    for /d %%D in ("%SystemRoot%\Temp\*") do rd /s /q "%%~fD" >nul 2>&1
+)
+:: 3. Bersihkan sampah aman di dalam %APPDATA% & %LOCALAPPDATA% (Tanpa merusak data POS/Browser)
+if defined APPDATA (
+    if exist "%APPDATA%\Microsoft\Windows\Recent\" del /f /q "%APPDATA%\Microsoft\Windows\Recent\*" >nul 2>&1
+)
+if defined LOCALAPPDATA (
+    if exist "%LOCALAPPDATA%\CrashDumps\" del /f /s /q "%LOCALAPPDATA%\CrashDumps\*" >nul 2>&1
+    if exist "%LOCALAPPDATA%\Temp\" (
+        del /f /s /q "%LOCALAPPDATA%\Temp\*" >nul 2>&1
+        for /d %%D in ("%LOCALAPPDATA%\Temp\*") do rd /s /q "%%~fD" >nul 2>&1
+    )
+    if exist "%LOCALAPPDATA%\Microsoft\Windows\INetCache\IE\" (
+        del /f /s /q "%LOCALAPPDATA%\Microsoft\Windows\INetCache\IE\*" >nul 2>&1
+        for /d %%D in ("%LOCALAPPDATA%\Microsoft\Windows\INetCache\IE\*") do rd /s /q "%%~fD" >nul 2>&1
+    )
+    if exist "%LOCALAPPDATA%\Microsoft\Windows\WER\ReportArchive\" (
+        for /d %%D in ("%LOCALAPPDATA%\Microsoft\Windows\WER\ReportArchive\*") do rd /s /q "%%~fD" >nul 2>&1
+    )
+    if exist "%LOCALAPPDATA%\Microsoft\Windows\WER\ReportQueue\" (
+        for /d %%D in ("%LOCALAPPDATA%\Microsoft\Windows\WER\ReportQueue\*") do rd /s /q "%%~fD" >nul 2>&1
+    )
+)
+:: 4. Bersihkan laporan error sistem (Windows Error Reporting ProgramData)
+if exist "%ProgramData%\Microsoft\Windows\WER\ReportArchive\" (
+    for /d %%D in ("%ProgramData%\Microsoft\Windows\WER\ReportArchive\*") do rd /s /q "%%~fD" >nul 2>&1
+)
+if exist "%ProgramData%\Microsoft\Windows\WER\ReportQueue\" (
+    for /d %%D in ("%ProgramData%\Microsoft\Windows\WER\ReportQueue\*") do rd /s /q "%%~fD" >nul 2>&1
+)
+:: 5. Kosongkan Recycle Bin di seluruh drive yang terpasang (Kompatibel Win 10 1507 - 22H2)
+for %%L in (C D E F G H I J K L M N O P Q R S T U V W X Y Z) do (
+    if exist "%%L:\$Recycle.Bin\" rd /s /q "%%L:\$Recycle.Bin" >nul 2>&1
+)
 exit /b 0
 
 :ShowSvc
