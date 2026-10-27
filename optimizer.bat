@@ -261,7 +261,9 @@ echo  - Transparansi dan animasi berat telah dimatikan ^(Font tetap halus/tidak 
 echo.
 
 echo [5/9] Mengoptimalkan File System ^(NTFS^)...
-%SystemRoot%\System32\fsutil.exe behavior set disablelastaccess 1 >nul 2>&1
+set "_FSUTIL_VAL=1"
+if "!WIN_BUILD!" GEQ "17134" if not "!WIN_BUILD!"=="Unknown" set "_FSUTIL_VAL=3"
+%SystemRoot%\System32\fsutil.exe behavior set disablelastaccess !_FSUTIL_VAL! >nul 2>&1
 if /i "!DISK_TYPE!"=="SSD" (
     %SystemRoot%\System32\fsutil.exe behavior set DisableDeleteNotify 0 >nul 2>&1
     echo  - LastAccess dimatikan ^& fitur TRIM SSD dipastikan aktif.
@@ -377,6 +379,8 @@ call :ManageService WerSvc demand
 call :ManageService DoSvc demand
 call :ManageService BITS demand
 call :ManageService Spooler auto
+call :ManageService LanmanServer auto
+call :ManageService LanmanWorkstation auto
 
 echo [*] Mengembalikan Pengaturan Hibernasi ^& NTFS...
 powercfg -h on >nul 2>&1
@@ -404,6 +408,7 @@ reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Search" /v BackgroundApp
 reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SilentInstalledAppsEnabled /t REG_DWORD /d 1 /f >nul 2>&1
 powercfg /setactive %GUID_BALANCED% >nul 2>&1 || powercfg /setactive SCHEME_BALANCED >nul 2>&1
 powercfg /change disk-timeout-ac 20 >nul 2>&1
+powercfg /change standby-timeout-ac 30 >nul 2>&1
 powercfg /setacvalueindex SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bebba308a3 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 1 >nul 2>&1
 powercfg /setactive SCHEME_CURRENT >nul 2>&1
 
